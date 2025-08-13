@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hospital Supply Chain Game — Dual Item</title>
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .card { @apply bg-white shadow rounded-2xl p-5; }
+    .btn  { @apply px-4 py-2 rounded-xl shadow text-white; }
+    .btn-primary { @apply bg-blue-600 hover:bg-blue-700; }
+    .btn-secondary { @apply bg-slate-600 hover:bg-slate-700; }
+    .btn-danger { @apply bg-red-600 hover:bg-red-700; }
+    .pill { @apply px-2 py-0.5 text-xs rounded-full bg-slate-100; }
+    .mono { font-variant-numeric: tabular-nums; }
+    .grid-4 { @apply grid grid-cols-2 md:grid-cols-4 gap-3; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+  <div class="max-w-7xl mx-auto p-6 space-y-6">
+    <header class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold">Hospital Supply Chain Game — Dual Item (PPE & IV)</h1>
+      <span id="statusPill" class="pill">offline</span>
+    </header>
+
+    <!-- LOBBY -->
+    <section class="card" id="lobby">
+      <h2 class="text-lg font-semibold mb-3">Lobby</h2>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium">Display Name</label>
+          <input id="nameInput" class="mt-1 w-full border rounded-lg p-2" placeholder="e.g., Team A / Michael" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Session Code</label>
+          <input id="codeInput" class="mt-1 w-full border rounded-lg p-2 uppercase" maxlength="8" placeholder="e.g., HSCG1234" />
+        </div>
+        <div class="flex items-end gap-2">
+          <button id="createBtn" class="btn btn-primary">Create Session (Instructor)</button>
+          <button id="joinBtn" class="btn btn-secondary">Join (Player)</button>
+        </div>
+      </div>
+      <details class="mt-4">
+        <summary class="cursor-pointer text-slate-700">How it works</summary>
+        <ol class="list-decimal ml-5 mt-2 text-sm text-slate-600">
+          <li>Instructor creates a session and shares the <b>code</b>.</li>
+          <li>Each team joins, picks an <b>item</b> (PPE or IV) and a <b>role</b>.</li>
+          <li>Game runs in <b>weeks</b>. Each week, players enter a <b>requisition</b> upstream.</li>
+          <li>App computes shipments, receipts (lead-time), inventory, backlog, fill-rate.</li>
+          <li>Instructor advances the week and can apply <b>preset scenarios</b> or reveal Transparency.</li>
+        </ol>
+      </details>
+    </section>
+
+    <!-- INSTRUCTOR PANEL -->
+    <section class="card hidden" id="instructorPanel">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold">Instructor Panel — <span id="sessionCodeHdr" class="font-mono"></span></h2>
+        <div class="flex items-center gap-2">
+          <label class="text-sm"><input type="checkbox" id="transparencyChk" class="mr-1"> Transparency On</label>
+          <button id="advanceBtn" class="btn btn-primary">Advance Week</button>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-5 gap-4 mt-4">
+        <div>
+          <label class="block text-sm font-medium">Item</label>
+          <select id="itemSelectInstr" class="mt-1 w-full border rounded-lg p-2">
+            <option value="PPE">PPE — N95 Masks</option>
+            <option value="IV">IV Fluids — 0.9% NaCl</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Preset Scenario</label>
+          <select id="presetSelect" class="mt-1 w-full border rounded-lg p-2">
+            <option value="none">(none)</option>
+            <option value="normal">Normal</option>
+            <option value="transparency">Transparency On</option>
+            <option value="severe">Severe Surge + Recall</option>
+          </select>
+        </div>
+        <div class="md:col-span-3 flex items-end gap-2">
+          <button id="applyPresetBtn" class="btn btn-secondary">Apply Preset</button>
+          <button id="applyControlBtn" class="btn btn-secondary">Apply/Reset Control for Item</button>
+          <button id="exportCsvBtn" class="btn btn-primary">Export Results CSV</button>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-4 gap-4 mt-4">
+        <div>
+          <label class="block text-sm font-medium">Item Name</label>
+          <input id="itemName" class="mt-1 w-full border rounded-lg p-2" value="PPE - N95 Masks" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Weeks</label>
+          <input id="weeks" type="number" min="4" max="52" class="mt-1 w-full border rounded-lg p-2" value="24" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Lead Time (weeks)</label>
+          <input id="leadTime" type="number" min="0" max="6" class="mt-1 w-full border rounded-lg p-2" value="2" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Initial Inventory (all roles)</label>
+          <input id="initInv" type="number" min="0" class="mt-1 w-full border rounded-lg p-2" value="120" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Inventory Cost ($/u/wk)</label>
+          <input id="invCost" type="number" step="0.01" class="mt-1 w-full border rounded-lg p-2" value="0.1" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Backorder Cost ($/u/wk)</label>
+          <input id="boCost" type="number" step="0.01" class="mt-1 w-full border rounded-lg p-2" value="50" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Expiration Cost ($/unit)</label>
+          <input id="expCost" type="number" step="0.01" class="mt-1 w-full border rounded-lg p-2" value="5" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Shelf Life (weeks)</label>
+          <input id="shelfLife" type="number" min="1" class="mt-1 w-full border rounded-lg p-2" value="8" />
+        </div>
+      </div>
+      <div class="grid md:grid-cols-3 gap-4 mt-4">
+        <div>
+          <label class="block text-sm font-medium">Scenario</label>
+          <select id="scenario" class="mt-1 w-full border rounded-lg p-2">
+            <option>Normal</option>
+            <option>Transparency On (Info Only)</option>
+            <option>Severe Surge + Recall</option>
+          </select>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium">Base Weekly Consumption (comma-separated, length = Weeks)</label>
+          <textarea id="baseDemand" rows="2" class="mt-1 w-full border rounded-lg p-2 font-mono text-sm"></textarea>
+          <p class="text-xs text-slate-500 mt-1">If blank, defaults are seeded per item (PPE surge 6–10; IV surge 8–12).</p>
+        </div>
+      </div>
+      <div class="grid md:grid-cols-2 gap-4 mt-4">
+        <div>
+          <label class="block text-sm font-medium">Factory Outage Weeks (e.g., 14-16)</label>
+          <input id="factoryOutage" class="mt-1 w-full border rounded-lg p-2" placeholder="14-16" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Prime Vendor Outage Weeks (e.g., 18-19)</label>
+          <input id="primeOutage" class="mt-1 w-full border rounded-lg p-2" placeholder="18-19" />
+        </div>
+      </div>
+      <div class="mt-4 text-sm text-slate-600">Current Week: <b id="currentWeekLbl">—</b></div>
+      <hr class="my-4" />
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <div>
+          <h3 class="font-semibold mb-2">Scoreboard — <span id="scoreItemHdr">PPE</span></h3>
+          <div id="scoreboard" class="overflow-x-auto"></div>
+        </div>
+        <div>
+          <h3 class="font-semibold mb-2">Comparison (Fill Rate %) — PPE vs IV</h3>
+          <div id="compareBox" class="grid-4"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PLAYER PANEL -->
+    <section class="card hidden" id="playerPanel">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold">Player — <span id="playerNameHdr" class="font-mono"></span></h2>
+        <div class="flex items-center gap-2">
+          <label class="block text-sm font-medium">Item:</label>
+          <select id="itemSelectPlayer" class="border rounded-lg p-2">
+            <option value="PPE">PPE — N95 Masks</option>
+            <option value="IV">IV Fluids — 0.9% NaCl</option>
+          </select>
+          <label class="block text-sm font-medium">Role:</label>
+          <select id="roleSelect" class="border rounded-lg p-2">
+            <option value="hospital">Hospital Supply Closet</option>
+            <option value="dc_regional">Regional DC</option>
+            <option value="dc_prime">Prime Vendor DC</option>
+            <option value="factory">Manufacturer</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-2 text-sm text-slate-600">Session <span id="playerSessionCode" class="font-mono"></span> • Week <b id="playerWeekLbl">—</b></div>
+      <div class="grid md:grid-cols-2 gap-4 mt-4">
+        <div id="roleStats" class="space-y-2"></div>
+        <div class="card bg-slate-50">
+          <h3 class="font-semibold mb-2">Your Requisition (to upstream)</h3>
+          <div class="flex items-center gap-2">
+            <input id="orderInput" type="number" min="0" class="w-40 border rounded-lg p-2" placeholder="units" />
+            <button id="submitOrderBtn" class="btn btn-primary">Submit for this Week</button>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">Edit allowed only for the current week. Orders for past weeks are locked.</p>
+          <div id="lanePeek" class="mt-4"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER / SETUP -->
+    <section class="card">
+      <h2 class="text-lg font-semibold mb-3">Setup</h2>
+      <p class="text-sm text-slate-600 mb-2">Create a <b>Firebase</b> project (Firestore) and paste your Web App config below, then refresh. This enables real-time multi-user play.</p>
+      <textarea id="firebaseCfg" class="w-full border rounded-lg p-2 font-mono text-xs" rows="6" placeholder='{
+  "apiKey": "...",
+  "authDomain": "...",
+  "projectId": "...",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}'></textarea>
+      <div class="mt-2 flex items-center gap-2">
+        <button id="saveCfgBtn" class="btn btn-secondary">Save Config</button>
+        <button id="hardResetBtn" class="btn btn-danger">Hard Reset (local)</button>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Deploy this single file to Netlify/Vercel/GitHub Pages. Add Firestore Rules to restrict writes to a session path for classroom use.</p>
+    </section>
+  </div>
+
+  <!-- Firebase (modular v10 CDN) -->
+  <script type="module">
+    // --- Firebase bootstrap ---
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js';
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
+
+    // Persist / load config
+    const cfgTextarea = document.getElementById('firebaseCfg');
+    const savedCfg = localStorage.getItem('hscg.firebase');
+    if (savedCfg) cfgTextarea.value = savedCfg;
+
+    let app = null, db = null;
+    function initFirebase() {
+      try {
+        const cfg = JSON.parse(cfgTextarea.value || '{}');
+        app = initializeApp(cfg);
+        db = getFirestore(app);
+        document.getElementById('statusPill').textContent = 'connected';
+        document.getElementById('statusPill').className = 'pill bg-green-100 text-green-700';
+      } catch (e) {
+        document.getElementById('statusPill').textContent = 'config needed';
+        document.getElementById('statusPill').className = 'pill bg-amber-100 text-amber-700';
+      }
+    }
+    initFirebase();
+
+    document.getElementById('saveCfgBtn').onclick = () => { localStorage.setItem('hscg.firebase', cfgTextarea.value); location.reload(); };
+    document.getElementById('hardResetBtn').onclick = () => { localStorage.clear(); location.reload(); };
+
+    // --- Domain Model ---
+    const ROLES = ['hospital','dc_regional','dc_prime','factory'];
+    const ROLE_LABEL = { hospital: 'Hospital Supply Closet', dc_regional: 'Regional DC', dc_prime: 'Prime Vendor DC', factory: 'Manufacturer' };
+    const ITEMS = ['PPE','IV'];
+
+    // Defaults per item
+    function seedBaseDemand(item, weeks=24){
+      return Array.from({length:weeks}, (_,i)=>{
+        const w=i+1;
+        if(item==='PPE') return Math.round(100 * (w>=6 && w<=10 ? 1.5 : 1.0));
+        return Math.round(80 * (w>=8 && w<=12 ? 1.6 : 1.0));
+      });
+    }
+    function seedOutages(item, weeks){
+      const fac = Array(weeks).fill(false), prv = Array(weeks).fill(false);
+      if(item==='PPE'){ for(let w=14; w<=16; w++) fac[w-1]=true; for(let w=18; w<=19; w++) prv[w-1]=true; }
+      else { for(let w=12; w<=15; w++) fac[w-1]=true; for(let w=17; w<=18; w++) prv[w-1]=true; }
+      return {fac, prv};
+    }
+    function parseRanges(str, weeks){
+      const out = Array.from({length:weeks},()=>false);
+      (str||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(tok=>{
+        if(/^\d+$/.test(tok)){ const w=+tok; if(w>=1&&w<=weeks) out[w-1]=true; }
+        const m = tok.match(/^(\d+)\s*[-:]\s*(\d+)$/); if(m){ let a=+m[1], b=+m[2]; if(a>b) [a,b]=[b,a]; for(let w=a; w<=b && w<=weeks; w++) out[w-1]=true; }
+      });
+      return out;
+    }
+    function spanifyRanges(flags){ let s=''; let i=0, W=flags?.length||0; while(i<W){ if(flags[i]){ let j=i; while(j+1<W && flags[j+1]) j++; s+=(s?', ':'')+(i+1)+(i===j?'':'-'+(j+1)); i=j+1; } else i++; } return s; }
+    function effectiveConsumption(scn, base, week){ if(scn==='Severe Surge + Recall'){ const val = base[week-1]||0; return Math.round(val * (week>=6 && week<=12 ? 1.8 : 1)); } return base[week-1]||0; }
+
+    function defaultControl(item){
+      const weeks = 24; const base = seedBaseDemand(item, weeks); const {fac,prv} = seedOutages(item, weeks);
+      return { itemName: item==='PPE'? 'PPE - N95 Masks' : 'IV Fluids - 0.9% NaCl', weeks, leadTime:2, initInv: item==='PPE'?120:160, invCost:0.1, boCost:50, expCost:5.0, shelfLifeWeeks:8, scenario:'Normal', baseConsumption: base, factoryOutage: fac, primeOutage: prv };
+    }
+
+    function buildControlFromUI(baseControl){
+      const weeks = +document.getElementById('weeks').value || baseControl.weeks;
+      const baseTxt = (document.getElementById('baseDemand').value||'').trim();
+      let base = baseTxt ? baseTxt.split(',').map(x=>+x.trim()||0).slice(0,weeks) : baseControl.baseConsumption;
+      if(base.length<weeks){ base = base.concat(Array(weeks-base.length).fill(base.at(-1)||0)); }
+      return {
+        itemName: document.getElementById('itemName').value||baseControl.itemName,
+        weeks,
+        leadTime: +document.getElementById('leadTime').value||baseControl.leadTime,
+        initInv: +document.getElementById('initInv').value||baseControl.initInv,
+        invCost: +document.getElementById('invCost').value||baseControl.invCost,
+        boCost: +document.getElementById('boCost').value||baseControl.boCost,
+        expCost: +document.getElementById('expCost').value||baseControl.expCost,
+        shelfLifeWeeks: +document.getElementById('shelfLife').value||baseControl.shelfLifeWeeks,
+        scenario: document.getElementById('scenario').value,
+        baseConsumption: base,
+        factoryOutage: parseRanges(document.getElementById('factoryOutage').value, weeks),
+        primeOutage: parseRanges(document.getElementById('primeOutage').value, weeks),
+      };
+    }
+
+    // Compute up to currentWeek
+    function computeGame(control, ordersByRole, currentWeek){
+      const W = Math.min(currentWeek, control.weeks);
+      const L = control.leadTime;
+      const roles = ROLES;
+      const state = {}; roles.forEach(r=> state[r] = { onHandStart:Array(W+1).fill(0), unfilledStart:Array(W+1).fill(0), receipts:Array(W+1).fill(0), demandSeen:Array(W+1).fill(0), ship:Array(W+1).fill(0), onHandEnd:Array(W+1).fill(0), unfilledEnd:Array(W+1).fill(0), fillRate:Array(W+1).fill(1) });
+      roles.forEach(r=>{ state[r].onHandStart[1]=control.initInv; });
+      const ORD=(role,w)=> (ordersByRole[role]?.[w] ?? 0);
+      for(let w=1; w<=W; w++){
+        state.hospital.demandSeen[w] = effectiveConsumption(control.scenario, control.baseConsumption, w);
+        state.dc_regional.demandSeen[w] = ORD('hospital', w);
+        state.dc_prime.demandSeen[w] = ORD('dc_regional', w);
+        state.factory.demandSeen[w] = ORD('dc_prime', w);
+        const getUp = (role)=> role==='hospital' ? 'dc_regional' : role==='dc_regional' ? 'dc_prime' : role==='dc_prime' ? 'factory' : null;
+        ROLES.forEach(role=>{ const up=getUp(role); const arr=(w-L)>=1 ? (state[up]?.ship[w-L]||0) : 0; state[role].receipts[w] = up? arr:0; });
+        ROLES.forEach(role=>{ const S=state[role]; const supply=(S.onHandStart[w]||0)+(S.receipts[w]||0); const need=(S.demandSeen[w]||0)+(S.unfilledStart[w]||0); let ship=Math.min(supply,need); if(role==='factory' && control.factoryOutage[w-1]) ship=0; if(role==='dc_prime' && control.primeOutage[w-1]) ship=0; S.ship[w]=ship; S.onHandEnd[w]=supply-ship; S.unfilledEnd[w]=Math.max(need-supply,0); S.fillRate[w]=need>0? (ship/need):1; });
+        if(w<W){ ROLES.forEach(role=>{ state[role].onHandStart[w+1]=state[role].onHandEnd[w]; state[role].unfilledStart[w+1]=state[role].unfilledEnd[w]; }); }
+      }
+      return state;
+    }
+
+    // --- Firestore helpers ---
+    const sessionsCol = () => collection(db, 'sessions');
+
+    async function createSession(code, instructorName){
+      const docRef = doc(sessionsCol(), code);
+      const ctlPPE = defaultControl('PPE');
+      const ctlIV = defaultControl('IV');
+      const payload = { code, instructor: instructorName, createdAt: serverTimestamp(), currentWeek:1, transparency:false, control:{ PPE: ctlPPE, IV: ctlIV }, orders:{ PPE:{}, IV:{} } };
+      await setDoc(docRef, payload);
+      return docRef;
+    }
+
+    async function joinSession(code){ const docRef = doc(sessionsCol(), code); const snap = await getDoc(docRef); return snap.exists() ? docRef : null; }
+    async function setTransparency(docRef, value){ await updateDoc(docRef, { transparency: !!value }); }
+    async function advanceWeek(docRef){ const snap=await getDoc(docRef); const cur=snap.data().currentWeek||1; const W=Math.max(snap.data().control?.PPE?.weeks||24, snap.data().control?.IV?.weeks||24); await updateDoc(docRef,{ currentWeek: Math.min(cur+1, W) }); }
+
+    async function applyControlForItem(docRef, itemKey){
+      const snap = await getDoc(docRef);
+      const data = snap.data();
+      const baseCtl = data.control?.[itemKey] || defaultControl(itemKey);
+      const newCtl = buildControlFromUI(baseCtl);
+      const control = Object.assign({}, data.control || {}); control[itemKey] = newCtl;
+      const orders = Object.assign({}, data.orders || {}); orders[itemKey] = {}; // reset orders for that item
+      await updateDoc(docRef, { control, orders });
+    }
+
+    async function submitOrder(docRef, itemKey, role, week, qty){
+      const snap = await getDoc(docRef);
+      const data = snap.data();
+      const orders = data.orders || { PPE:{}, IV:{} };
+      const itemOrders = Object.assign({}, orders[itemKey]||{});
+      const roleMap = Object.assign({}, itemOrders[role]||{});
+      roleMap[week] = Math.max(0, Math.floor(+qty||0));
+      itemOrders[role] = roleMap; orders[itemKey] = itemOrders;
+      await updateDoc(docRef, { orders });
+    }
+
+    function toIntMap(obj){ const out={}; Object.entries(obj||{}).forEach(([k,v])=> out[+k]=+v||0 ); return out; }
+
+    // --- UI wiring ---
+    const nameInput = document.getElementById('nameInput');
+    const codeInput = document.getElementById('codeInput');
+    const createBtn = document.getElementById('createBtn');
+    const joinBtn = document.getElementById('joinBtn');
+    const instructorPanel = document.getElementById('instructorPanel');
+    const playerPanel = document.getElementById('playerPanel');
+    const itemSelectInstr = document.getElementById('itemSelectInstr');
+    const itemSelectPlayer = document.getElementById('itemSelectPlayer');
+
+    let sessionRef = null; let isInstructor = false; let myName = '';
+
+    createBtn.onclick = async () => {
+      if(!db) { alert('Add Firebase config first.'); return; }
+      const code = (codeInput.value||'').trim().toUpperCase();
+      const name = (nameInput.value||'').trim() || 'Instructor';
+      if(!code) { alert('Enter a session code.'); return; }
+      const ref = await createSession(code, name);
+      attachSession(ref); isInstructor = true; myName = name;
+    };
+
+    joinBtn.onclick = async () => {
+      if(!db) { alert('Add Firebase config first.'); return; }
+      const code = (codeInput.value||'').trim().toUpperCase();
+      const name = (nameInput.value||'').trim() || 'Player';
+      if(!code) { alert('Enter a session code.'); return; }
+      const ref = await joinSession(code);
+      if(!ref){ alert('Session not found.'); return; }
+      attachSession(ref); isInstructor = false; myName = name;
+    };
+
+    document.getElementById('applyControlBtn').onclick = async ()=>{ if(sessionRef) await applyControlForItem(sessionRef, itemSelectInstr.value); };
+    document.getElementById('advanceBtn').onclick = async ()=>{ if(sessionRef) await advanceWeek(sessionRef); };
+    document.getElementById('transparencyChk').onchange = async (e)=>{ if(sessionRef) await setTransparency(sessionRef, e.target.checked); };
+
+    document.getElementById('applyPresetBtn').onclick = async ()=>{
+      if(!sessionRef) return; const snap=await getDoc(sessionRef); const data=snap.data(); const item=itemSelectInstr.value; const ctl = Object.assign({}, data.control?.[item] || defaultControl(item));
+      const p = document.getElementById('presetSelect').value;
+      if(p==='normal'){ ctl.scenario='Normal'; const {fac,prv}=seedOutages(item, ctl.weeks); ctl.baseConsumption=seedBaseDemand(item, ctl.weeks); ctl.factoryOutage=fac; ctl.primeOutage=prv; }
+      if(p==='transparency'){ ctl.scenario='Transparency On (Info Only)'; }
+      if(p==='severe'){
+        ctl.scenario='Severe Surge + Recall';
+        const fac=[...ctl.factoryOutage]; const prv=[...ctl.primeOutage];
+        for(let i=0;i<fac.length;i++){ if(i+1>=12 && i+1<=16 && item==='PPE') fac[i]=true; if(item==='IV' && i+1>=11 && i+1<=15) fac[i]=true; }
+        for(let i=0;i<prv.length;i++){ if(i+1>=18 && i+1<=22 && item==='PPE') prv[i]=true; if(item==='IV' && i+1>=16 && i+1<=19) prv[i]=true; }
+        ctl.factoryOutage=fac; ctl.primeOutage=prv;
+      }
+      const control = Object.assign({}, data.control||{}); control[item]=ctl;
+      await updateDoc(sessionRef, { control });
+    };
+
+    document.getElementById('submitOrderBtn').onclick = async ()=>{
+      const role = document.getElementById('roleSelect').value;
+      const item = itemSelectPlayer.value;
+      const qty = document.getElementById('orderInput').value;
+      const snap = await getDoc(sessionRef);
+      const { currentWeek } = snap.data();
+      await submitOrder(sessionRef, item, role, currentWeek, qty);
+    };
+
+    itemSelectInstr.onchange = ()=>{ /* re-render via snapshot */ };
+    itemSelectPlayer.onchange = ()=> renderPlayer();
+    document.getElementById('roleSelect').onchange = ()=> renderPlayer();
+
+    async function exportCsv(data){
+      const W = data.currentWeek;
+      let rows = [['week','item','role','orders_from_downstream','receipts','ship_to_downstream','onhand_end','backlog_end','fill_rate','order_placed']];
+      for(const item of ITEMS){
+        const ctl = data.control?.[item] || defaultControl(item);
+        const ordersByRole = {}; ROLES.forEach(r=> ordersByRole[r] = toIntMap(data.orders?.[item]?.[r]||{}));
+        const state = computeGame(ctl, ordersByRole, W);
+        for(let w=1; w<=W; w++){
+          for(const role of ROLES){
+            const S=state[role]; const orderPlaced = ordersByRole[role][w]||0;
+            rows.push([w,item,role, S.demandSeen[w]||0, S.receipts[w]||0, S.ship[w]||0, S.onHandEnd[w]||0, S.unfilledEnd[w]||0, (S.fillRate[w]||0).toFixed(3), orderPlaced]);
+          }
+        }
+      }
+      const csv = rows.map(r=> r.map(x=> typeof x==='string' && x.includes(',')? '"'+x.replaceAll('"','""')+'"': x).join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download=`hscg_results_week${W}.csv`; a.click(); URL.revokeObjectURL(url);
+    }
+    document.getElementById('exportCsvBtn').onclick = async ()=>{ if(!sessionRef) return; const snap=await getDoc(sessionRef); exportCsv(snap.data()); };
+
+    function attachSession(ref){
+      sessionRef = ref;
+      document.getElementById('sessionCodeHdr').textContent = ref.id;
+      document.getElementById('playerSessionCode').textContent = ref.id;
+      document.getElementById('lobby').classList.add('hidden');
+      if(isInstructor){ instructorPanel.classList.remove('hidden'); playerPanel.classList.add('hidden'); } else { playerPanel.classList.remove('hidden'); instructorPanel.classList.add('hidden'); }
+
+      onSnapshot(ref, (snap)=>{
+        const data = snap.data(); if(!data) return;
+        // Migration: ensure dual-item shape exists
+        if(!data.control?.PPE || !data.control?.IV){
+          updateDoc(ref, { control: { PPE: data.control?.PPE || defaultControl('PPE'), IV: data.control?.IV || defaultControl('IV') }, orders: data.orders||{PPE:{},IV:{}} });
+          return;
+        }
+        document.getElementById('currentWeekLbl').textContent = data.currentWeek;
+        document.getElementById('playerWeekLbl').textContent = data.currentWeek;
+        document.getElementById('transparencyChk').checked = !!data.transparency;
+        renderInstructor(data); if(!isInstructor) renderPlayer(data);
+      });
+    }
+
+    function fillControlUI(ctl){
+      document.getElementById('itemName').value = ctl.itemName;
+      document.getElementById('weeks').value = ctl.weeks;
+      document.getElementById('leadTime').value = ctl.leadTime;
+      document.getElementById('initInv').value = ctl.initInv;
+      document.getElementById('invCost').value = ctl.invCost;
+      document.getElementById('boCost').value = ctl.boCost;
+      document.getElementById('expCost').value = ctl.expCost;
+      document.getElementById('shelfLife').value = ctl.shelfLifeWeeks;
+      document.getElementById('scenario').value = ctl.scenario;
+      document.getElementById('factoryOutage').value = spanifyRanges(ctl.factoryOutage||[]);
+      document.getElementById('primeOutage').value = spanifyRanges(ctl.primeOutage||[]);
+      document.getElementById('baseDemand').value = (ctl.baseConsumption||[]).join(', ');
+    }
+
+    function renderInstructor(data){
+      const item = itemSelectInstr.value;
+      const ctl = data.control?.[item] || defaultControl(item);
+      fillControlUI(ctl);
+      document.getElementById('scoreItemHdr').textContent = item;
+
+      const ordersByRole = {}; ROLES.forEach(r=>{ ordersByRole[r] = toIntMap(data.orders?.[item]?.[r]||{}); });
+      const state = computeGame(ctl, ordersByRole, data.currentWeek);
+
+      // Scoreboard (selected item)
+      const tbl = document.createElement('table'); tbl.className = 'w-full text-sm';
+      tbl.innerHTML = `
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2">Role</th>
+            <th>Last Ship</th>
+            <th>On-hand</th>
+            <th>Backlog</th>
+            <th>Fill%</th>
+            <th>Order (wk ${data.currentWeek})</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${ROLES.map(r=>{ const S=state[r]; const w=data.currentWeek; const lastShip=S.ship[w]||0; const oh=S.onHandEnd[w]||S.onHandStart[w]||0; const bl=S.unfilledEnd[w]||S.unfilledStart[w]||0; const fr=((S.fillRate[w]||1)*100).toFixed(0)+'%'; const ord = ordersByRole[r][w]||0; return `<tr class="border-t"><td class="py-1">${ROLE_LABEL[r]}</td><td class="mono">${lastShip}</td><td class="mono">${oh}</td><td class="mono">${bl}</td><td class="mono">${fr}</td><td class="mono">${ord}</td></tr>`; }).join('')}
+        </tbody>`;
+      const box = document.getElementById('scoreboard'); box.innerHTML=''; box.appendChild(tbl);
+
+      // Comparison (PPE vs IV) — current week fill rates
+      const ctlP = data.control?.PPE || defaultControl('PPE');
+      const ctlI = data.control?.IV || defaultControl('IV');
+      const ordP={}, ordI={}; ROLES.forEach(r=>{ ordP[r]=toIntMap(data.orders?.PPE?.[r]||{}); ordI[r]=toIntMap(data.orders?.IV?.[r]||{}); });
+      const stP = computeGame(ctlP, ordP, data.currentWeek); const stI = computeGame(ctlI, ordI, data.currentWeek);
+      const w = data.currentWeek;
+      const cmp = document.getElementById('compareBox');
+      cmp.innerHTML = ROLES.map(r=>{
+        const p=((stP[r].fillRate[w]||1)*100).toFixed(0), i=((stI[r].fillRate[w]||1)*100).toFixed(0);
+        return `<div class='p-4 bg-white rounded-xl shadow'><div class='text-xs text-slate-500 mb-1'>${ROLE_LABEL[r]}</div><div class='text-sm'>PPE: <b class='mono'>${p}%</b></div><div class='text-sm'>IV: <b class='mono'>${i}%</b></div></div>`;
+      }).join('');
+    }
+
+    function renderPlayer(data){
+      document.getElementById('playerNameHdr').textContent = myName || 'Player';
+      const role = document.getElementById('roleSelect').value;
+      const item = itemSelectPlayer.value;
+      const ctl = data?.control?.[item] || defaultControl(item);
+      const ordersByRole = {}; ROLES.forEach(r=>{ ordersByRole[r] = toIntMap(data?.orders?.[item]?.[r]||{}); });
+      const state = computeGame(ctl, ordersByRole, data?.currentWeek||1);
+      const w = data?.currentWeek||1;
+
+      const S = state[role];
+      const html = `
+        <div class="card">
+          <div class="text-sm text-slate-600">${ROLE_LABEL[role]} — ${item} — Week ${w}</div>
+          <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
+            <div>Orders from downstream</div><div class="mono">${S.demandSeen[w]||0}</div>
+            <div>Receipts (delayed)</div><div class="mono">${S.receipts[w]||0}</div>
+            <div>Ship to downstream</div><div class="mono">${S.ship[w]||0}</div>
+            <div>On-hand end</div><div class="mono">${S.onHandEnd[w]||S.onHandStart[w]||0}</div>
+            <div>Backlog end</div><div class="mono">${S.unfilledEnd[w]||S.unfilledStart[w]||0}</div>
+            <div>Fill rate</div><div class="mono">${((S.fillRate[w]||1)*100).toFixed(0)}%</div>
+          </div>
+        </div>`;
+      document.getElementById('roleStats').innerHTML = html;
+
+      const peek = document.getElementById('lanePeek');
+      if(data?.transparency){
+        peek.innerHTML = `<div class="mt-2"><b>All Lanes — ${item} (Week ${w})</b><div class="grid-4 mt-2">${ROLES.map(r=>{ const X = state[r]; return `<div class='p-3 bg-white rounded-xl shadow'><div class='text-xs text-slate-500'>${ROLE_LABEL[r]}</div><div class='text-sm'>Ship: <b class='mono'>${X.ship[w]||0}</b></div><div class='text-sm'>OH: <b class='mono'>${X.onHandEnd[w]||0}</b></div><div class='text-sm'>BO: <b class='mono'>${X.unfilledEnd[w]||0}</b></div></div>`;}).join('')}</div></div>`;
+      } else { peek.innerHTML = '<div class="text-xs text-slate-500">Transparency Off</div>'; }
+
+      const myOrd = ordersByRole[role][w] || '';
+      const orderInput = document.getElementById('orderInput');
+      orderInput.value = myOrd; orderInput.disabled = false;
+    }
+  </script>
+</body>
+</html>
