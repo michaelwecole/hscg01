@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hospital Supply Chain Game — Dual Item</title>
+  <title>Hospital Supply Chain Game</title>
   <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -14,20 +14,19 @@
     .btn-danger { @apply bg-red-600 hover:bg-red-700; }
     .pill { @apply px-2 py-0.5 text-xs rounded-full bg-slate-100; }
     .mono { font-variant-numeric: tabular-nums; }
-    .grid-4 { @apply grid grid-cols-2 md:grid-cols-4 gap-3; }
   </style>
 </head>
 <body class="min-h-screen bg-slate-50">
   <div class="max-w-7xl mx-auto p-6 space-y-6">
     <header class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold">Hospital Supply Chain Game — Dual Item (PPE & IV)</h1>
+      <h1 class="text-2xl font-bold">Hospital Supply Chain Game (Beer Game — Healthcare)</h1>
       <span id="statusPill" class="pill">offline</span>
     </header>
 
     <!-- LOBBY -->
     <section class="card" id="lobby">
       <h2 class="text-lg font-semibold mb-3">Lobby</h2>
-      <div class="grid md:grid-cols-3 gap-4">
+      <div class="grid md:grid-cols-4 gap-4">
         <div>
           <label class="block text-sm font-medium">Display Name</label>
           <input id="nameInput" class="mt-1 w-full border rounded-lg p-2" placeholder="e.g., Team A / Michael" />
@@ -35,6 +34,10 @@
         <div>
           <label class="block text-sm font-medium">Session Code</label>
           <input id="codeInput" class="mt-1 w-full border rounded-lg p-2 uppercase" maxlength="8" placeholder="e.g., HSCG1234" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Session Passcode</label>
+          <input id="passInput" class="mt-1 w-full border rounded-lg p-2" placeholder="e.g., 4-6 digits" />
         </div>
         <div class="flex items-end gap-2">
           <button id="createBtn" class="btn btn-primary">Create Session (Instructor)</button>
@@ -45,10 +48,10 @@
         <summary class="cursor-pointer text-slate-700">How it works</summary>
         <ol class="list-decimal ml-5 mt-2 text-sm text-slate-600">
           <li>Instructor creates a session and shares the <b>code</b>.</li>
-          <li>Each team joins, picks an <b>item</b> (PPE or IV) and a <b>role</b>.</li>
-          <li>Game runs in <b>weeks</b>. Each week, players enter a <b>requisition</b> upstream.</li>
-          <li>App computes shipments, receipts (lead-time), inventory, backlog, fill-rate.</li>
-          <li>Instructor advances the week and can apply <b>preset scenarios</b> or reveal Transparency.</li>
+          <li>Each team joins and picks a <b>role</b> (Hospital / Regional DC / Prime Vendor DC / Manufacturer).</li>
+          <li>Game runs in <b>weeks</b>. Each week, players <b>enter a requisition</b> to upstream.</li>
+          <li>App computes shipments, receipts (with lead-time), inventory, backlog, fill-rate.</li>
+          <li>Instructor advances the week. Optionally enable <b>Transparency</b> to reveal all lanes.</li>
         </ol>
       </details>
     </section>
@@ -62,31 +65,6 @@
           <button id="advanceBtn" class="btn btn-primary">Advance Week</button>
         </div>
       </div>
-
-      <div class="grid md:grid-cols-5 gap-4 mt-4">
-        <div>
-          <label class="block text-sm font-medium">Item</label>
-          <select id="itemSelectInstr" class="mt-1 w-full border rounded-lg p-2">
-            <option value="PPE">PPE — N95 Masks</option>
-            <option value="IV">IV Fluids — 0.9% NaCl</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium">Preset Scenario</label>
-          <select id="presetSelect" class="mt-1 w-full border rounded-lg p-2">
-            <option value="none">(none)</option>
-            <option value="normal">Normal</option>
-            <option value="transparency">Transparency On</option>
-            <option value="severe">Severe Surge + Recall</option>
-          </select>
-        </div>
-        <div class="md:col-span-3 flex items-end gap-2">
-          <button id="applyPresetBtn" class="btn btn-secondary">Apply Preset</button>
-          <button id="applyControlBtn" class="btn btn-secondary">Apply/Reset Control for Item</button>
-          <button id="exportCsvBtn" class="btn btn-primary">Export Results CSV</button>
-        </div>
-      </div>
-
       <div class="grid md:grid-cols-4 gap-4 mt-4">
         <div>
           <label class="block text-sm font-medium">Item Name</label>
@@ -133,7 +111,7 @@
         <div class="md:col-span-2">
           <label class="block text-sm font-medium">Base Weekly Consumption (comma-separated, length = Weeks)</label>
           <textarea id="baseDemand" rows="2" class="mt-1 w-full border rounded-lg p-2 font-mono text-sm"></textarea>
-          <p class="text-xs text-slate-500 mt-1">If blank, defaults are seeded per item (PPE surge 6–10; IV surge 8–12).</p>
+          <p class="text-xs text-slate-500 mt-1">If left blank, the app seeds PPE defaults (100/wk with a flu surge in weeks 6–10).</p>
         </div>
       </div>
       <div class="grid md:grid-cols-2 gap-4 mt-4">
@@ -146,18 +124,35 @@
           <input id="primeOutage" class="mt-1 w-full border rounded-lg p-2" placeholder="18-19" />
         </div>
       </div>
-      <div class="mt-4 text-sm text-slate-600">Current Week: <b id="currentWeekLbl">—</b></div>
-      <hr class="my-4" />
+      <div class="mt-4 flex items-center gap-2">
+        <button id="applyControlBtn" class="btn btn-secondary">Apply/Reset Control</button>
+        <span class="text-sm text-slate-600">Current Week: <b id="currentWeekLbl">—</b></span>
+      </div>
 
-      <div class="grid md:grid-cols-2 gap-6">
-        <div>
-          <h3 class="font-semibold mb-2">Scoreboard — <span id="scoreItemHdr">PPE</span></h3>
-          <div id="scoreboard" class="overflow-x-auto"></div>
+      <div class="grid md:grid-cols-5 gap-3 mt-4">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium">Preset Scenario</label>
+          <select id="presetSelect" class="mt-1 w-full border rounded-lg p-2">
+            <option value="none">(none)</option>
+            <option value="normal">Normal</option>
+            <option value="transparency">Transparency On</option>
+            <option value="severe">Severe Surge + Recall</option>
+            <option value="hurricane">Hurricane Prep</option>
+            <option value="strike">Supplier Strike</option>
+            <option value="outbreak">Viral Outbreak</option>
+          </select>
         </div>
-        <div>
-          <h3 class="font-semibold mb-2">Comparison (Fill Rate %) — PPE vs IV</h3>
-          <div id="compareBox" class="grid-4"></div>
+        <div class="flex items-end gap-2">
+          <button id="applyPresetBtn" class="btn btn-secondary">Apply Preset</button>
+          <button id="exportCsvBtn" class="btn btn-primary">Export CSV</button>
+          <button id="demoBtn" class="btn btn-secondary">Demo Session Seed</button>
         </div>
+      </div>
+      <hr class="my-4" />
+      <div id="scoreboard" class="overflow-x-auto"></div>
+      <div class="mt-4">
+        <h3 class="font-semibold mb-2">KPI Summary</h3>
+        <div id="kpiBox" class="overflow-x-auto"></div>
       </div>
     </section>
 
@@ -166,12 +161,7 @@
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold">Player — <span id="playerNameHdr" class="font-mono"></span></h2>
         <div class="flex items-center gap-2">
-          <label class="block text-sm font-medium">Item:</label>
-          <select id="itemSelectPlayer" class="border rounded-lg p-2">
-            <option value="PPE">PPE — N95 Masks</option>
-            <option value="IV">IV Fluids — 0.9% NaCl</option>
-          </select>
-          <label class="block text-sm font-medium">Role:</label>
+          <label class="block text-sm font-medium">Choose Role:</label>
           <select id="roleSelect" class="border rounded-lg p-2">
             <option value="hospital">Hospital Supply Closet</option>
             <option value="dc_regional">Regional DC</option>
@@ -211,7 +201,7 @@
         <button id="saveCfgBtn" class="btn btn-secondary">Save Config</button>
         <button id="hardResetBtn" class="btn btn-danger">Hard Reset (local)</button>
       </div>
-      <p class="text-xs text-slate-500 mt-2">Deploy this single file to Netlify/Vercel/GitHub Pages. Add Firestore Rules to restrict writes to a session path for classroom use.</p>
+      <p class="text-xs text-slate-500 mt-2">Deploy this single file to Netlify/Vercel/GitHub Pages. Firestore Security Rules should restrict writes to the selected session path for classroom use.</p>
     </section>
   </div>
 
@@ -219,14 +209,14 @@
   <script type="module">
     // --- Firebase bootstrap ---
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js';
-    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 
-    // Persist / load config
+    // Persist / load config from localStorage
     const cfgTextarea = document.getElementById('firebaseCfg');
     const savedCfg = localStorage.getItem('hscg.firebase');
     if (savedCfg) cfgTextarea.value = savedCfg;
 
-    let app = null, db = null;
+    let app = null, db = null; let writeKey = ''; // session passcode used for writes
     function initFirebase() {
       try {
         const cfg = JSON.parse(cfgTextarea.value || '{}');
@@ -241,82 +231,130 @@
     }
     initFirebase();
 
-    document.getElementById('saveCfgBtn').onclick = () => { localStorage.setItem('hscg.firebase', cfgTextarea.value); location.reload(); };
-    document.getElementById('hardResetBtn').onclick = () => { localStorage.clear(); location.reload(); };
+    document.getElementById('saveCfgBtn').onclick = () => {
+      localStorage.setItem('hscg.firebase', cfgTextarea.value);
+      location.reload();
+    };
+    document.getElementById('hardResetBtn').onclick = () => {
+      localStorage.clear(); location.reload();
+    };
 
     // --- Domain Model ---
     const ROLES = ['hospital','dc_regional','dc_prime','factory'];
-    const ROLE_LABEL = { hospital: 'Hospital Supply Closet', dc_regional: 'Regional DC', dc_prime: 'Prime Vendor DC', factory: 'Manufacturer' };
-    const ITEMS = ['PPE','IV'];
+    const ROLE_LABEL = {
+      hospital: 'Hospital Supply Closet',
+      dc_regional: 'Regional DC',
+      dc_prime: 'Prime Vendor DC',
+      factory: 'Manufacturer',
+    };
 
-    // Defaults per item
-    function seedBaseDemand(item, weeks=24){
+    // Default PPE seeds
+    function seedBaseDemand(weeks=24){
       return Array.from({length:weeks}, (_,i)=>{
-        const w=i+1;
-        if(item==='PPE') return Math.round(100 * (w>=6 && w<=10 ? 1.5 : 1.0));
-        return Math.round(80 * (w>=8 && w<=12 ? 1.6 : 1.0));
+        const w=i+1; const base=100; return Math.round(base * (w>=6 && w<=10 ? 1.5 : 1.0));
       });
     }
-    function seedOutages(item, weeks){
-      const fac = Array(weeks).fill(false), prv = Array(weeks).fill(false);
-      if(item==='PPE'){ for(let w=14; w<=16; w++) fac[w-1]=true; for(let w=18; w<=19; w++) prv[w-1]=true; }
-      else { for(let w=12; w<=15; w++) fac[w-1]=true; for(let w=17; w<=18; w++) prv[w-1]=true; }
-      return {fac, prv};
-    }
     function parseRanges(str, weeks){
+      // e.g. "14-16, 20" => boolean array length weeks
       const out = Array.from({length:weeks},()=>false);
       (str||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(tok=>{
-        if(/^\d+$/.test(tok)){ const w=+tok; if(w>=1&&w<=weeks) out[w-1]=true; }
-        const m = tok.match(/^(\d+)\s*[-:]\s*(\d+)$/); if(m){ let a=+m[1], b=+m[2]; if(a>b) [a,b]=[b,a]; for(let w=a; w<=b && w<=weeks; w++) out[w-1]=true; }
+        if(/^-?\d+$/.test(tok)){ const w=+tok; if(w>=1&&w<=weeks) out[w-1]=true; }
+        const m = tok.match(/^(\d+)\s*[-:]\s*(\d+)$/);
+        if(m){ let a=+m[1], b=+m[2]; if(a>b) [a,b]=[b,a];
+          for(let w=a; w<=b && w<=weeks; w++) out[w-1]=true;
+        }
       });
       return out;
     }
-    function spanifyRanges(flags){ let s=''; let i=0, W=flags?.length||0; while(i<W){ if(flags[i]){ let j=i; while(j+1<W && flags[j+1]) j++; s+=(s?', ':'')+(i+1)+(i===j?'':'-'+(j+1)); i=j+1; } else i++; } return s; }
-    function effectiveConsumption(scn, base, week){ if(scn==='Severe Surge + Recall'){ const val = base[week-1]||0; return Math.round(val * (week>=6 && week<=12 ? 1.8 : 1)); } return base[week-1]||0; }
 
-    function defaultControl(item){
-      const weeks = 24; const base = seedBaseDemand(item, weeks); const {fac,prv} = seedOutages(item, weeks);
-      return { itemName: item==='PPE'? 'PPE - N95 Masks' : 'IV Fluids - 0.9% NaCl', weeks, leadTime:2, initInv: item==='PPE'?120:160, invCost:0.1, boCost:50, expCost:5.0, shelfLifeWeeks:8, scenario:'Normal', baseConsumption: base, factoryOutage: fac, primeOutage: prv };
+    function effectiveConsumption(scn, base, week){
+      if(scn==='Severe Surge + Recall'){
+        // amplify weeks 6–12 by 1.8x
+        const idx=week-1; const val = base[idx]||0; return Math.round(val * (week>=6 && week<=12 ? 1.8 : 1));
+      }
+      return base[week-1]||0; // Normal and Transparency
     }
 
-    function buildControlFromUI(baseControl){
-      const weeks = +document.getElementById('weeks').value || baseControl.weeks;
+    function buildControlFromUI(){
+      const weeks = +document.getElementById('weeks').value || 24;
       const baseTxt = (document.getElementById('baseDemand').value||'').trim();
-      let base = baseTxt ? baseTxt.split(',').map(x=>+x.trim()||0).slice(0,weeks) : baseControl.baseConsumption;
+      let base = baseTxt ? baseTxt.split(',').map(x=>+x.trim()||0).slice(0,weeks) : seedBaseDemand(weeks);
       if(base.length<weeks){ base = base.concat(Array(weeks-base.length).fill(base.at(-1)||0)); }
-      return {
-        itemName: document.getElementById('itemName').value||baseControl.itemName,
+      const control = {
+        itemName: document.getElementById('itemName').value||'PPE - N95 Masks',
         weeks,
-        leadTime: +document.getElementById('leadTime').value||baseControl.leadTime,
-        initInv: +document.getElementById('initInv').value||baseControl.initInv,
-        invCost: +document.getElementById('invCost').value||baseControl.invCost,
-        boCost: +document.getElementById('boCost').value||baseControl.boCost,
-        expCost: +document.getElementById('expCost').value||baseControl.expCost,
-        shelfLifeWeeks: +document.getElementById('shelfLife').value||baseControl.shelfLifeWeeks,
+        leadTime: +document.getElementById('leadTime').value||2,
+        initInv: +document.getElementById('initInv').value||120,
+        invCost: +document.getElementById('invCost').value||0.1,
+        boCost: +document.getElementById('boCost').value||50,
+        expCost: +document.getElementById('expCost').value||5.0,
+        shelfLifeWeeks: +document.getElementById('shelfLife').value||8,
         scenario: document.getElementById('scenario').value,
         baseConsumption: base,
         factoryOutage: parseRanges(document.getElementById('factoryOutage').value, weeks),
         primeOutage: parseRanges(document.getElementById('primeOutage').value, weeks),
       };
+      return control;
     }
 
-    // Compute up to currentWeek
+    // Compute all lanes up to currentWeek from control + orders
     function computeGame(control, ordersByRole, currentWeek){
       const W = Math.min(currentWeek, control.weeks);
       const L = control.leadTime;
       const roles = ROLES;
-      const state = {}; roles.forEach(r=> state[r] = { onHandStart:Array(W+1).fill(0), unfilledStart:Array(W+1).fill(0), receipts:Array(W+1).fill(0), demandSeen:Array(W+1).fill(0), ship:Array(W+1).fill(0), onHandEnd:Array(W+1).fill(0), unfilledEnd:Array(W+1).fill(0), fillRate:Array(W+1).fill(1) });
-      roles.forEach(r=>{ state[r].onHandStart[1]=control.initInv; });
-      const ORD=(role,w)=> (ordersByRole[role]?.[w] ?? 0);
+      const state = {};
+      roles.forEach(r=>{ state[r] = {
+        onHandStart: Array(W+1).fill(0), // 1..W
+        unfilledStart: Array(W+1).fill(0),
+        receipts: Array(W+1).fill(0),
+        demandSeen: Array(W+1).fill(0),
+        ship: Array(W+1).fill(0),
+        onHandEnd: Array(W+1).fill(0),
+        unfilledEnd: Array(W+1).fill(0),
+        fillRate: Array(W+1).fill(1),
+      };});
+      // init inventories
+      roles.forEach(r=>{ state[r].onHandStart[1] = control.initInv; });
+
+      // helper to get orders for a role/week (missing => 0)
+      const ORD = (role, w)=> (ordersByRole[role]?.[w] ?? 0);
+
       for(let w=1; w<=W; w++){
+        // Demand each role sees
         state.hospital.demandSeen[w] = effectiveConsumption(control.scenario, control.baseConsumption, w);
         state.dc_regional.demandSeen[w] = ORD('hospital', w);
         state.dc_prime.demandSeen[w] = ORD('dc_regional', w);
         state.factory.demandSeen[w] = ORD('dc_prime', w);
+
+        // Receipts are upstream shipments delayed by L
         const getUp = (role)=> role==='hospital' ? 'dc_regional' : role==='dc_regional' ? 'dc_prime' : role==='dc_prime' ? 'factory' : null;
-        ROLES.forEach(role=>{ const up=getUp(role); const arr=(w-L)>=1 ? (state[up]?.ship[w-L]||0) : 0; state[role].receipts[w] = up? arr:0; });
-        ROLES.forEach(role=>{ const S=state[role]; const supply=(S.onHandStart[w]||0)+(S.receipts[w]||0); const need=(S.demandSeen[w]||0)+(S.unfilledStart[w]||0); let ship=Math.min(supply,need); if(role==='factory' && control.factoryOutage[w-1]) ship=0; if(role==='dc_prime' && control.primeOutage[w-1]) ship=0; S.ship[w]=ship; S.onHandEnd[w]=supply-ship; S.unfilledEnd[w]=Math.max(need-supply,0); S.fillRate[w]=need>0? (ship/need):1; });
-        if(w<W){ ROLES.forEach(role=>{ state[role].onHandStart[w+1]=state[role].onHandEnd[w]; state[role].unfilledStart[w+1]=state[role].unfilledEnd[w]; }); }
+        roles.forEach(role=>{
+          const up = getUp(role);
+          const arrivesFrom = (w-L)>=1 ? (state[up]?.ship[w-L] || 0) : 0;
+          state[role].receipts[w] = up? arrivesFrom : 0;
+        });
+
+        // Shipments with outage gates
+        roles.forEach(role=>{
+          const S = state[role];
+          const supplyAvail = (S.onHandStart[w]||0) + (S.receipts[w]||0);
+          const demandPlusBacklog = (S.demandSeen[w]||0) + (S.unfilledStart[w]||0);
+          let ship = Math.min(supplyAvail, demandPlusBacklog);
+          if(role==='factory' && control.factoryOutage[w-1]) ship = 0;
+          if(role==='dc_prime' && control.primeOutage[w-1]) ship = 0;
+          S.ship[w] = ship;
+          S.onHandEnd[w] = supplyAvail - ship;
+          S.unfilledEnd[w] = Math.max(demandPlusBacklog - supplyAvail, 0);
+          S.fillRate[w] = demandPlusBacklog>0 ? (ship/demandPlusBacklog) : 1;
+        });
+
+        // Roll to next week (start values)
+        if(w < W){
+          roles.forEach(role=>{
+            state[role].onHandStart[w+1] = state[role].onHandEnd[w];
+            state[role].unfilledStart[w+1] = state[role].unfilledEnd[w];
+          });
+        }
       }
       return state;
     }
@@ -325,50 +363,54 @@
     const sessionsCol = () => collection(db, 'sessions');
 
     async function createSession(code, instructorName){
+      const control = buildControlFromUI();
       const docRef = doc(sessionsCol(), code);
-      const ctlPPE = defaultControl('PPE');
-      const ctlIV = defaultControl('IV');
-      const payload = { code, instructor: instructorName, createdAt: serverTimestamp(), currentWeek:1, transparency:false, control:{ PPE: ctlPPE, IV: ctlIV }, orders:{ PPE:{}, IV:{} } };
+      const payload = {
+        code,
+        instructor: instructorName,
+        createdAt: serverTimestamp(),
+        currentWeek: 1,
+        transparency: false,
+        control,
+        orders: {},
+        writeKey: writeKey || 'CLASS' // set from UI; default fallback
+      };
       await setDoc(docRef, payload);
       return docRef;
     }
 
-    async function joinSession(code){ const docRef = doc(sessionsCol(), code); const snap = await getDoc(docRef); return snap.exists() ? docRef : null; }
-    async function setTransparency(docRef, value){ await updateDoc(docRef, { transparency: !!value }); }
-    async function advanceWeek(docRef){ const snap=await getDoc(docRef); const cur=snap.data().currentWeek||1; const W=Math.max(snap.data().control?.PPE?.weeks||24, snap.data().control?.IV?.weeks||24); await updateDoc(docRef,{ currentWeek: Math.min(cur+1, W) }); }
-
-    async function applyControlForItem(docRef, itemKey){
+    async function joinSession(code){
+      const docRef = doc(sessionsCol(), code);
       const snap = await getDoc(docRef);
-      const data = snap.data();
-      const baseCtl = data.control?.[itemKey] || defaultControl(itemKey);
-      const newCtl = buildControlFromUI(baseCtl);
-      const control = Object.assign({}, data.control || {}); control[itemKey] = newCtl;
-      const orders = Object.assign({}, data.orders || {}); orders[itemKey] = {}; // reset orders for that item
-      await updateDoc(docRef, { control, orders });
+      return snap.exists() ? docRef : null;
     }
 
-    async function submitOrder(docRef, itemKey, role, week, qty){
+    async function setTransparency(docRef, value){ await updateDoc(docRef, { transparency: !!value, writeKey }); }); }
+    async function advanceWeek(docRef){ const snap=await getDoc(docRef); const cur=snap.data().currentWeek||1; const W=snap.data().control.weeks||24; await updateDoc(docRef,{ currentWeek: Math.min(cur+1, W), writeKey }); }); }
+    async function applyControl(docRef){ const control=buildControlFromUI(); await updateDoc(docRef,{ control, currentWeek:1, orders:{}, writeKey }); } }); }
+
+    async function submitOrder(docRef, role, week, qty){
       const snap = await getDoc(docRef);
-      const data = snap.data();
-      const orders = data.orders || { PPE:{}, IV:{} };
-      const itemOrders = Object.assign({}, orders[itemKey]||{});
-      const roleMap = Object.assign({}, itemOrders[role]||{});
-      roleMap[week] = Math.max(0, Math.floor(+qty||0));
-      itemOrders[role] = roleMap; orders[itemKey] = itemOrders;
+      const orders = snap.data().orders || {};
+      const rmap = orders[role] || {};
+      rmap[week] = Math.max(0, Math.floor(+qty||0));
+      orders[role] = rmap;
+      await updateDoc(docRef, { orders, writeKey });
+    };
+      const rmap = orders[role] || {};
+      rmap[week] = Math.max(0, Math.floor(+qty||0));
+      orders[role] = rmap;
       await updateDoc(docRef, { orders });
     }
-
-    function toIntMap(obj){ const out={}; Object.entries(obj||{}).forEach(([k,v])=> out[+k]=+v||0 ); return out; }
 
     // --- UI wiring ---
     const nameInput = document.getElementById('nameInput');
     const codeInput = document.getElementById('codeInput');
     const createBtn = document.getElementById('createBtn');
     const joinBtn = document.getElementById('joinBtn');
+
     const instructorPanel = document.getElementById('instructorPanel');
     const playerPanel = document.getElementById('playerPanel');
-    const itemSelectInstr = document.getElementById('itemSelectInstr');
-    const itemSelectPlayer = document.getElementById('itemSelectPlayer');
 
     let sessionRef = null; let isInstructor = false; let myName = '';
 
@@ -376,7 +418,10 @@
       if(!db) { alert('Add Firebase config first.'); return; }
       const code = (codeInput.value||'').trim().toUpperCase();
       const name = (nameInput.value||'').trim() || 'Instructor';
+      const pass = (document.getElementById('passInput').value||'').trim();
       if(!code) { alert('Enter a session code.'); return; }
+      if(!pass) { alert('Enter a session passcode.'); return; }
+      writeKey = pass;
       const ref = await createSession(code, name);
       attachSession(ref); isInstructor = true; myName = name;
     };
@@ -385,65 +430,36 @@
       if(!db) { alert('Add Firebase config first.'); return; }
       const code = (codeInput.value||'').trim().toUpperCase();
       const name = (nameInput.value||'').trim() || 'Player';
+      const pass = (document.getElementById('passInput').value||'').trim();
       if(!code) { alert('Enter a session code.'); return; }
       const ref = await joinSession(code);
       if(!ref){ alert('Session not found.'); return; }
+      // Verify passcode against session doc
+      const snap = await getDoc(ref);
+      const wk = snap.data()?.writeKey || '';
+      if(!pass || pass!==wk){ alert('Incorrect passcode for this session.'); return; }
+      writeKey = pass;
       attachSession(ref); isInstructor = false; myName = name;
     };
 
-    document.getElementById('applyControlBtn').onclick = async ()=>{ if(sessionRef) await applyControlForItem(sessionRef, itemSelectInstr.value); };
+    // Instructor controls
+    document.getElementById('applyControlBtn').onclick = async ()=>{ if(sessionRef) await applyControl(sessionRef); };
+    document.getElementById('applyPresetBtn').onclick = async ()=>{ if(sessionRef) await applyPreset(sessionRef); };
+    document.getElementById('exportCsvBtn').onclick = async ()=>{ if(sessionRef){ const snap=await getDoc(sessionRef); exportCsv(snap.data()); }};
+    document.getElementById('demoBtn').onclick = async ()=>{ if(sessionRef){ await seedDemo(sessionRef); }};
     document.getElementById('advanceBtn').onclick = async ()=>{ if(sessionRef) await advanceWeek(sessionRef); };
     document.getElementById('transparencyChk').onchange = async (e)=>{ if(sessionRef) await setTransparency(sessionRef, e.target.checked); };
 
-    document.getElementById('applyPresetBtn').onclick = async ()=>{
-      if(!sessionRef) return; const snap=await getDoc(sessionRef); const data=snap.data(); const item=itemSelectInstr.value; const ctl = Object.assign({}, data.control?.[item] || defaultControl(item));
-      const p = document.getElementById('presetSelect').value;
-      if(p==='normal'){ ctl.scenario='Normal'; const {fac,prv}=seedOutages(item, ctl.weeks); ctl.baseConsumption=seedBaseDemand(item, ctl.weeks); ctl.factoryOutage=fac; ctl.primeOutage=prv; }
-      if(p==='transparency'){ ctl.scenario='Transparency On (Info Only)'; }
-      if(p==='severe'){
-        ctl.scenario='Severe Surge + Recall';
-        const fac=[...ctl.factoryOutage]; const prv=[...ctl.primeOutage];
-        for(let i=0;i<fac.length;i++){ if(i+1>=12 && i+1<=16 && item==='PPE') fac[i]=true; if(item==='IV' && i+1>=11 && i+1<=15) fac[i]=true; }
-        for(let i=0;i<prv.length;i++){ if(i+1>=18 && i+1<=22 && item==='PPE') prv[i]=true; if(item==='IV' && i+1>=16 && i+1<=19) prv[i]=true; }
-        ctl.factoryOutage=fac; ctl.primeOutage=prv;
-      }
-      const control = Object.assign({}, data.control||{}); control[item]=ctl;
-      await updateDoc(sessionRef, { control });
-    };
-
+    // Player controls
     document.getElementById('submitOrderBtn').onclick = async ()=>{
       const role = document.getElementById('roleSelect').value;
-      const item = itemSelectPlayer.value;
       const qty = document.getElementById('orderInput').value;
       const snap = await getDoc(sessionRef);
       const { currentWeek } = snap.data();
-      await submitOrder(sessionRef, item, role, currentWeek, qty);
+      await submitOrder(sessionRef, role, currentWeek, qty);
     };
 
-    itemSelectInstr.onchange = ()=>{ /* re-render via snapshot */ };
-    itemSelectPlayer.onchange = ()=> renderPlayer();
-    document.getElementById('roleSelect').onchange = ()=> renderPlayer();
-
-    async function exportCsv(data){
-      const W = data.currentWeek;
-      let rows = [['week','item','role','orders_from_downstream','receipts','ship_to_downstream','onhand_end','backlog_end','fill_rate','order_placed']];
-      for(const item of ITEMS){
-        const ctl = data.control?.[item] || defaultControl(item);
-        const ordersByRole = {}; ROLES.forEach(r=> ordersByRole[r] = toIntMap(data.orders?.[item]?.[r]||{}));
-        const state = computeGame(ctl, ordersByRole, W);
-        for(let w=1; w<=W; w++){
-          for(const role of ROLES){
-            const S=state[role]; const orderPlaced = ordersByRole[role][w]||0;
-            rows.push([w,item,role, S.demandSeen[w]||0, S.receipts[w]||0, S.ship[w]||0, S.onHandEnd[w]||0, S.unfilledEnd[w]||0, (S.fillRate[w]||0).toFixed(3), orderPlaced]);
-          }
-        }
-      }
-      const csv = rows.map(r=> r.map(x=> typeof x==='string' && x.includes(',')? '"'+x.replaceAll('"','""')+'"': x).join(',')).join('\n');
-      const blob = new Blob([csv], {type:'text/csv'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href=url; a.download=`hscg_results_week${W}.csv`; a.click(); URL.revokeObjectURL(url);
-    }
-    document.getElementById('exportCsvBtn').onclick = async ()=>{ if(!sessionRef) return; const snap=await getDoc(sessionRef); exportCsv(snap.data()); };
+    document.getElementById('roleSelect').onchange = renderPlayer;
 
     function attachSession(ref){
       sessionRef = ref;
@@ -454,11 +470,6 @@
 
       onSnapshot(ref, (snap)=>{
         const data = snap.data(); if(!data) return;
-        // Migration: ensure dual-item shape exists
-        if(!data.control?.PPE || !data.control?.IV){
-          updateDoc(ref, { control: { PPE: data.control?.PPE || defaultControl('PPE'), IV: data.control?.IV || defaultControl('IV') }, orders: data.orders||{PPE:{},IV:{}} });
-          return;
-        }
         document.getElementById('currentWeekLbl').textContent = data.currentWeek;
         document.getElementById('playerWeekLbl').textContent = data.currentWeek;
         document.getElementById('transparencyChk').checked = !!data.transparency;
@@ -466,31 +477,26 @@
       });
     }
 
-    function fillControlUI(ctl){
-      document.getElementById('itemName').value = ctl.itemName;
-      document.getElementById('weeks').value = ctl.weeks;
-      document.getElementById('leadTime').value = ctl.leadTime;
-      document.getElementById('initInv').value = ctl.initInv;
-      document.getElementById('invCost').value = ctl.invCost;
-      document.getElementById('boCost').value = ctl.boCost;
-      document.getElementById('expCost').value = ctl.expCost;
-      document.getElementById('shelfLife').value = ctl.shelfLifeWeeks;
-      document.getElementById('scenario').value = ctl.scenario;
-      document.getElementById('factoryOutage').value = spanifyRanges(ctl.factoryOutage||[]);
-      document.getElementById('primeOutage').value = spanifyRanges(ctl.primeOutage||[]);
-      document.getElementById('baseDemand').value = (ctl.baseConsumption||[]).join(', ');
-    }
-
     function renderInstructor(data){
-      const item = itemSelectInstr.value;
-      const ctl = data.control?.[item] || defaultControl(item);
-      fillControlUI(ctl);
-      document.getElementById('scoreItemHdr').textContent = item;
+      // Fill control UI with current values
+      const c=data.control;
+      document.getElementById('itemName').value = c.itemName;
+      document.getElementById('weeks').value = c.weeks;
+      document.getElementById('leadTime').value = c.leadTime;
+      document.getElementById('initInv').value = c.initInv;
+      document.getElementById('invCost').value = c.invCost;
+      document.getElementById('boCost').value = c.boCost;
+      document.getElementById('expCost').value = c.expCost;
+      document.getElementById('shelfLife').value = c.shelfLifeWeeks;
+      document.getElementById('scenario').value = c.scenario;
+      document.getElementById('factoryOutage').value = spanifyRanges(c.factoryOutage);
+      document.getElementById('primeOutage').value = spanifyRanges(c.primeOutage);
+      document.getElementById('baseDemand').value = (c.baseConsumption||[]).join(', ');
 
-      const ordersByRole = {}; ROLES.forEach(r=>{ ordersByRole[r] = toIntMap(data.orders?.[item]?.[r]||{}); });
-      const state = computeGame(ctl, ordersByRole, data.currentWeek);
+      // Build scoreboard
+      const ordersByRole = {}; ROLES.forEach(r=>{ ordersByRole[r] = toIntMap(data.orders?.[r]||{}); });
+      const state = computeGame(c, ordersByRole, data.currentWeek);
 
-      // Scoreboard (selected item)
       const tbl = document.createElement('table'); tbl.className = 'w-full text-sm';
       tbl.innerHTML = `
         <thead>
@@ -508,32 +514,41 @@
         </tbody>`;
       const box = document.getElementById('scoreboard'); box.innerHTML=''; box.appendChild(tbl);
 
-      // Comparison (PPE vs IV) — current week fill rates
-      const ctlP = data.control?.PPE || defaultControl('PPE');
-      const ctlI = data.control?.IV || defaultControl('IV');
-      const ordP={}, ordI={}; ROLES.forEach(r=>{ ordP[r]=toIntMap(data.orders?.PPE?.[r]||{}); ordI[r]=toIntMap(data.orders?.IV?.[r]||{}); });
-      const stP = computeGame(ctlP, ordP, data.currentWeek); const stI = computeGame(ctlI, ordI, data.currentWeek);
-      const w = data.currentWeek;
-      const cmp = document.getElementById('compareBox');
-      cmp.innerHTML = ROLES.map(r=>{
-        const p=((stP[r].fillRate[w]||1)*100).toFixed(0), i=((stI[r].fillRate[w]||1)*100).toFixed(0);
-        return `<div class='p-4 bg-white rounded-xl shadow'><div class='text-xs text-slate-500 mb-1'>${ROLE_LABEL[r]}</div><div class='text-sm'>PPE: <b class='mono'>${p}%</b></div><div class='text-sm'>IV: <b class='mono'>${i}%</b></div></div>`;
-      }).join('');
+      // KPI Summary
+      const kpi = computeKPIs(c, state, data.currentWeek);
+      const kpiTbl = document.createElement('table'); kpiTbl.className='w-full text-sm';
+      kpiTbl.innerHTML = `
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2">Role</th>
+            <th>Avg Fill%</th>
+            <th>Total Inv Cost</th>
+            <th>Total Backorder Cost</th>
+            <th>Total Expiration Cost</th>
+            <th>Total Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${ROLES.map(r=>{ const R=kpi.perRole[r]; return `<tr class='border-t'><td class='py-1'>${ROLE_LABEL[r]}</td><td class='mono'>${(R.fillRateAvg*100).toFixed(0)}%</td><td class='mono'>${R.invCost.toFixed(2)}</td><td class='mono'>${R.boCost.toFixed(2)}</td><td class='mono'>${R.expCost.toFixed(2)}</td><td class='mono'>${R.total.toFixed(2)}</td></tr>`;}).join('')}
+          <tr class='border-t font-semibold'><td class='py-1'>Supply Chain Total</td><td class='mono'>${(kpi.totals.fillRateAvg*100).toFixed(0)}%</td><td class='mono'>${kpi.totals.invCost.toFixed(2)}</td><td class='mono'>${kpi.totals.boCost.toFixed(2)}</td><td class='mono'>${kpi.totals.expCost.toFixed(2)}</td><td class='mono'>${kpi.totals.total.toFixed(2)}</td></tr>
+        </tbody>`;
+      const kbox = document.getElementById('kpiBox'); kbox.innerHTML=''; kbox.appendChild(kpiTbl);
     }
 
     function renderPlayer(data){
       document.getElementById('playerNameHdr').textContent = myName || 'Player';
       const role = document.getElementById('roleSelect').value;
-      const item = itemSelectPlayer.value;
-      const ctl = data?.control?.[item] || defaultControl(item);
-      const ordersByRole = {}; ROLES.forEach(r=>{ ordersByRole[r] = toIntMap(data?.orders?.[item]?.[r]||{}); });
-      const state = computeGame(ctl, ordersByRole, data?.currentWeek||1);
+      const c = data?.control || buildControlFromUI();
+      const ordersByRole = {};
+      ROLES.forEach(r=>{ ordersByRole[r] = toIntMap(data?.orders?.[r]||{}); });
+      const state = computeGame(c, ordersByRole, data?.currentWeek||1);
       const w = data?.currentWeek||1;
 
+      // Show lane stats
       const S = state[role];
       const html = `
         <div class="card">
-          <div class="text-sm text-slate-600">${ROLE_LABEL[role]} — ${item} — Week ${w}</div>
+          <div class="text-sm text-slate-600">${ROLE_LABEL[role]} — Week ${w}</div>
           <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
             <div>Orders from downstream</div><div class="mono">${S.demandSeen[w]||0}</div>
             <div>Receipts (delayed)</div><div class="mono">${S.receipts[w]||0}</div>
@@ -545,14 +560,30 @@
         </div>`;
       document.getElementById('roleStats').innerHTML = html;
 
+      // Show transparency peek
       const peek = document.getElementById('lanePeek');
       if(data?.transparency){
-        peek.innerHTML = `<div class="mt-2"><b>All Lanes — ${item} (Week ${w})</b><div class="grid-4 mt-2">${ROLES.map(r=>{ const X = state[r]; return `<div class='p-3 bg-white rounded-xl shadow'><div class='text-xs text-slate-500'>${ROLE_LABEL[r]}</div><div class='text-sm'>Ship: <b class='mono'>${X.ship[w]||0}</b></div><div class='text-sm'>OH: <b class='mono'>${X.onHandEnd[w]||0}</b></div><div class='text-sm'>BO: <b class='mono'>${X.unfilledEnd[w]||0}</b></div></div>`;}).join('')}</div></div>`;
+        peek.innerHTML = `<div class="mt-2"><b>All Lanes (Week ${w})</b><div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">${ROLES.map(r=>{
+          const X = state[r];
+          return `<div class='p-3 bg-white rounded-xl shadow'><div class='text-xs text-slate-500'>${ROLE_LABEL[r]}</div>
+            <div class='text-sm'>Ship: <b class='mono'>${X.ship[w]||0}</b></div>
+            <div class='text-sm'>OH: <b class='mono'>${X.onHandEnd[w]||0}</b></div>
+            <div class='text-sm'>BO: <b class='mono'>${X.unfilledEnd[w]||0}</b></div>
+          </div>`;}).join('')}</div></div>`;
       } else { peek.innerHTML = '<div class="text-xs text-slate-500">Transparency Off</div>'; }
 
+      // Lock order input for past weeks
       const myOrd = ordersByRole[role][w] || '';
       const orderInput = document.getElementById('orderInput');
       orderInput.value = myOrd; orderInput.disabled = false;
+    }
+
+    function toIntMap(obj){ const out={}; Object.entries(obj||{}).forEach(([k,v])=> out[+k]=+v||0 ); return out; }
+    function spanifyRanges(flags){
+      // convert boolean array into compact string (e.g., 14-16, 18-19)
+      let s=''; let i=0; const W = flags?.length||0;
+      while(i<W){ if(flags[i]){ let j=i; while(j+1<W && flags[j+1]) j++; s += (s? ', ':'') + (i+1) + (i===j? '': '-' + (j+1)); i=j+1; } else i++; }
+      return s;
     }
   </script>
 </body>
