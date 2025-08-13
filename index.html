@@ -385,9 +385,9 @@
       return snap.exists() ? docRef : null;
     }
 
-    async function setTransparency(docRef, value){ await updateDoc(docRef, { transparency: !!value, writeKey }); }); }
-    async function advanceWeek(docRef){ const snap=await getDoc(docRef); const cur=snap.data().currentWeek||1; const W=snap.data().control.weeks||24; await updateDoc(docRef,{ currentWeek: Math.min(cur+1, W), writeKey }); }); }
-    async function applyControl(docRef){ const control=buildControlFromUI(); await updateDoc(docRef,{ control, currentWeek:1, orders:{}, writeKey }); } }); }
+    async function setTransparency(docRef, value){ await updateDoc(docRef, { transparency: !!value, writeKey }); }); }); }
+    async function advanceWeek(docRef){ const snap=await getDoc(docRef); const cur=snap.data().currentWeek||1; const W=snap.data().control.weeks||24; await updateDoc(docRef,{ currentWeek: Math.min(cur+1, W), writeKey }); }); }); }
+    async function applyControl(docRef){ const control=buildControlFromUI(); await updateDoc(docRef,{ control, currentWeek:1, orders:{}, writeKey }); }, writeKey }); } }); }
 
     async function submitOrder(docRef, role, week, qty){
       const snap = await getDoc(docRef);
@@ -396,11 +396,6 @@
       rmap[week] = Math.max(0, Math.floor(+qty||0));
       orders[role] = rmap;
       await updateDoc(docRef, { orders, writeKey });
-    };
-      const rmap = orders[role] || {};
-      rmap[week] = Math.max(0, Math.floor(+qty||0));
-      orders[role] = rmap;
-      await updateDoc(docRef, { orders });
     }
 
     // --- UI wiring ---
@@ -584,6 +579,81 @@
       let s=''; let i=0; const W = flags?.length||0;
       while(i<W){ if(flags[i]){ let j=i; while(j+1<W && flags[j+1]) j++; s += (s? ', ':'') + (i+1) + (i===j? '': '-' + (j+1)); i=j+1; } else i++; }
       return s;
+    }
+
+    // ---- Presets, KPI, CSV, Demo helpers ----
+    function movingAvg(arr, idx, span){ let s=0,c=0; for(let i=idx-span+1;i<=idx;i++){ if(i>=0){ s+=arr[i]||0; c++; } } return c? s/c : 0; }
+
+    function computeKPIs(control, state, W){
+      const out={ perRole:{}, totals:{invCost:0,boCost:0,expCost:0,total:0,fillRateAvg:0} };
+      const invC=control.invCost, boC=control.boCost, expC=control.expCost, SL=control.shelfLifeWeeks||8;
+      let fSum=0,fCnt=0;
+      ROLES.forEach(r=>{
+        let inv=0,bo=0,exp=0,fr=0,fc=0;
+        for(let w=1; w<=W; w++){
+          const S=state[r];
+          inv += (S.onHandEnd[w]||0)*invC;
+          bo  += (S.unfilledEnd[w]||0)*boC;
+          const denom=(S.demandSeen[w]||0)+(S.unfilledStart[w]||0);
+          if(denom>0){ fr += (S.ship[w]||0)/denom; fc++; }
+          const avgDem = (r==='hospital') ? movingAvg(control.baseConsumption,w-1,4)
+                                          : movingAvg(S.demandSeen,w-1,4);
+          const onh=S.onHandEnd[w]||0; const woh=avgDem>0? onh/avgDem:0;
+          const expUnits = woh>SL ? ((woh-SL)/woh)*onh : 0;
+          exp += expUnits*expC;
+        }
+        const total=inv+bo+exp; const fra=fc? fr/fc : 1;
+        out.perRole[r]={invCost:inv,boCost:bo,expCost:exp,total,fillRateAvg:fra};
+        out.totals.invCost+=inv; out.totals.boCost+=bo; out.totals.expCost+=exp; out.totals.total+=total; fSum+=fr; fCnt+=fc;
+      });
+      out.totals.fillRateAvg = fCnt? fSum/fCnt : 1; return out;
+    }
+
+    function exportCsv(data){
+      const c=data.control; const W=data.currentWeek; const orders=data.orders||{}; const ordersByRole={};
+      ROLES.forEach(r=> ordersByRole[r]=toIntMap(orders[r]||{}));
+      const state=computeGame(c, ordersByRole, W);
+      let rows=['item,role,week,onhand_start,unfilled_start,receipts,demand,ship,onhand_end,unfilled_end,fill_rate,order,inv_cost,bo_cost,exp_units,exp_cost'];
+      for(const r of ROLES){
+        for(let w=1; w<=W; w++){
+          const S=state[r];
+          const inv_cost=(S.onHandEnd[w]||0)*c.invCost;
+          const bo_cost=(S.unfilledEnd[w]||0)*c.boCost;
+          const avgDem=(r==='hospital')? movingAvg(c.baseConsumption,w-1,4) : movingAvg(S.demandSeen,w-1,4);
+          const onh=S.onHandEnd[w]||0; const woh=avgDem>0? onh/avgDem:0; const exp_units=woh>c.shelfLifeWeeks? ((woh-c.shelfLifeWeeks)/woh)*onh:0; const exp_cost=exp_units*c.expCost;
+          rows.push([
+            JSON.stringify(c.itemName), r, w,
+            S.onHandStart[w]||0, S.unfilledStart[w]||0, S.receipts[w]||0, S.demandSeen[w]||0, S.ship[w]||0, S.onHandEnd[w]||0, S.unfilledEnd[w]||0,
+            ((S.demandSeen[w]||0)+(S.unfilledStart[w]||0)>0? (S.ship[w]/((S.demandSeen[w]||0)+(S.unfilledStart[w]||0))):1).toFixed(4),
+            (ordersByRole[r][w]||0), inv_cost.toFixed(2), bo_cost.toFixed(2), exp_units.toFixed(2), exp_cost.toFixed(2)
+          ].join(','));
+        }
+      }
+      const blob = new Blob([rows.join('
+')], {type:'text/csv'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`hscg_export_${Date.now()}.csv`; a.click();
+    }
+
+    function applyPresetLocal(kind){
+      const weeks=+document.getElementById('weeks').value||24;
+      const base=seedBaseDemand(weeks).slice();
+      let fact='',prime='';
+      if(kind==='normal'){ /* defaults */ }
+      else if(kind==='transparency'){ document.getElementById('scenario').value='Transparency On (Info Only)'; }
+      else if(kind==='severe'){ for(let w=6; w<=12 && w<=weeks; w++) base[w-1]=Math.round(base[w-1]*1.8); fact='12-16'; prime='18-22'; document.getElementById('scenario').value='Severe Surge + Recall'; }
+      else if(kind==='hurricane'){ for(let w=3; w<=6 && w<=weeks; w++) base[w-1]=Math.round(base[w-1]*1.6); prime='7-9'; }
+      else if(kind==='strike'){ fact='8-12'; }
+      else if(kind==='outbreak'){ for(let w=5; w<=weeks; w++) base[w-1]=Math.round(base[w-1]*1.4); }
+      document.getElementById('baseDemand').value=base.join(', ');
+      document.getElementById('factoryOutage').value=fact; document.getElementById('primeOutage').value=prime;
+    }
+    async function applyPreset(ref){ const kind=document.getElementById('presetSelect').value; if(kind==='none') return; applyPresetLocal(kind); await applyControl(ref); }
+
+    async function seedDemo(ref){
+      const snap=await getDoc(ref); const data=snap.data(); const W=Math.min(3, data.control.weeks||24); const orders=data.orders||{};
+      ROLES.forEach(r=> orders[r]=orders[r]||{});
+      for(let w=1; w<=W; w++){ orders.hospital[w]=120+10*w; orders.dc_regional[w]=130+8*w; orders.dc_prime[w]=140+6*w; orders.factory[w]=150+4*w; }
+      await updateDoc(ref,{ orders, currentWeek:W, writeKey });
     }
   </script>
 </body>
