@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Hospital Supply Chain Game</title>
   <script>
-    tailwind.config = {
+    // Ensure the global exists before assigning config to avoid ReferenceError in some browsers
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
       safelist: [
         'bg-green-100','text-green-700',
         'bg-amber-100','text-amber-700',
