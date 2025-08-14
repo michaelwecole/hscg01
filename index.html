@@ -133,6 +133,13 @@
         <h3 class="font-semibold mb-2">Share these links with players</h3>
         <p class="text-xs text-slate-600 mb-2">Each link opens the game as a specific role and pre-fills the passcode. Share directly or copy the invite text.</p>
         <div id="linksGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3"></div>
+        <h4 class="mt-4 font-semibold">View links (read-only)</h4>
+        <p class="text-xs text-slate-600 mb-2">Open a fixed view with trend lines for classroom projection.</p>
+        <div id="viewLinksGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3"></div>
+        <div class="mt-2 flex items-center gap-3">
+          <button id="openAllViewsBtn" class="btn btn-primary">Open all 5 view tabs</button>
+          <span class="text-xs text-slate-500">If tabs don’t open, allow pop-ups and click again.</span>
+        </div>
         <div class="mt-3">
           <label class="block text-sm font-medium mb-1">Invite text (email/Slack)</label>
           <textarea id="inviteText" class="w-full border rounded-lg p-2 font-mono text-xs" rows="4" readonly></textarea>
@@ -171,6 +178,12 @@
           <div id="lanePeek" class="mt-4 text-sm text-slate-600"></div>
         </div>
       </div>
+    </section>
+
+    <!-- View-only Panel -->
+    <section class="card hidden" id="viewPanel">
+      <h2 class="text-lg font-semibold"><span id="viewTitle">View</span></h2>
+      <div id="viewBody" class="mt-3"></div>
     </section>
 
     <!-- Setup (hidden because config is hardcoded) -->
@@ -231,14 +244,19 @@
     function showError(msg){ const b=el('errorBanner'); if(!b) return; b.textContent = msg; b.classList.remove('hidden'); }
     function clearError(){ const b=el('errorBanner'); if(!b) return; b.textContent=''; b.classList.add('hidden'); }
 
+    // Link builders (pure helpers)
+    function buildRoleLink(base, code, role){
+      return `${base}?code=${encodeURIComponent(code)}&role=${encodeURIComponent(role)}&k=${encodeURIComponent(writeKey)}`;
+    }
+    function buildViewLink(base, code, view){
+      return `${base}?code=${encodeURIComponent(code)}&view=${encodeURIComponent(view)}&k=${encodeURIComponent(writeKey)}`;
+    }
+
     // Build and show four shareable URLs (one per role)
     function setShareLinks(code){
       const base = location.origin + location.pathname;
       const grid = el('linksGrid');
-      const cards = ROLES.map(r=>{
-        const link = `${base}?code=${encodeURIComponent(code)}&role=${encodeURIComponent(r)}&k=${encodeURIComponent(writeKey)}`;
-        return { r, link };
-      });
+      const cards = ROLES.map(r=>({ r, link: buildRoleLink(base, code, r) }));
       grid.innerHTML = cards.map(({r,link})=>
         `<div class='p-3 bg-slate-50 rounded-lg'>
           <div class='text-xs text-slate-500 mb-1'>${LABEL[r]}</div>
@@ -253,6 +271,78 @@
       const invite = buildInviteText(code, cards);
       const inviteEl = el('inviteText'); inviteEl.value = invite;
       el('copyInvitesBtn').onclick = async ()=>{ await navigator.clipboard.writeText(inviteEl.value); toast('Invites copied'); };
+
+      // View links (summary + each role)
+      const vgrid = el('viewLinksGrid');
+      if(vgrid){
+        const items = [
+          {label:'Overall Summary', view:'summary'},
+          {label: LABEL.hospital, view:'hospital'},
+          {label: LABEL.dc_regional, view:'dc_regional'},
+          {label: LABEL.dc_prime, view:'dc_prime'},
+          {label: LABEL.factory, view:'factory'}
+        ];
+        vgrid.innerHTML = items.map(v=>{
+          const vlink = buildViewLink(base, code, v.view);
+          return `<div class='p-3 bg-slate-50 rounded-lg'>
+            <div class='text-xs text-slate-500 mb-1'>${v.label}</div>
+            <input class='w-full text-xs font-mono border rounded p-1' value='${vlink}' readonly />
+            <button class='btn btn-secondary w-full mt-2' data-vlink='${vlink}'>Copy</button>
+          </div>`;
+        }).join('');
+        vgrid.querySelectorAll('button[data-vlink]').forEach(btn=>{
+          btn.onclick=async()=>{ await navigator.clipboard.writeText(btn.dataset.vlink); toast('Link copied'); };
+        });
+      }
+
+      // Open-all button
+      const openAllBtn = el('openAllViewsBtn');
+      if(openAllBtn){
+        openAllBtn.onclick=()=>{
+          const views=['summary','hospital','dc_regional','dc_prime','factory'];
+          const urls = views.map(v=> buildViewLink(base, code, v));
+          let opened=0; urls.forEach(u=>{ const w=window.open(u,'_blank'); if(w) opened++; });
+          if(opened<urls.length) toast('Some tabs were blocked—enable pop-ups and click again.');
+        };
+      }
+    });
+      grid.innerHTML = cards.map(({r,link})=>
+        `<div class='p-3 bg-slate-50 rounded-lg'>
+          <div class='text-xs text-slate-500 mb-1'>${LABEL[r]}</div>
+          <input class='w-full text-xs font-mono border rounded p-1' value='${link}' readonly />
+          <button class='btn btn-secondary w-full mt-2' data-link='${link}'>Copy</button>
+        </div>`
+      ).join('');
+      el('shareLinks').classList.remove('hidden');
+      grid.querySelectorAll('button[data-link]').forEach(btn=>{
+        btn.onclick=async()=>{ await navigator.clipboard.writeText(btn.dataset.link); toast('Link copied'); };
+      });
+      const invite = buildInviteText(code, cards);
+      const inviteEl = el('inviteText'); inviteEl.value = invite;
+      el('copyInvitesBtn').onclick = async ()=>{ await navigator.clipboard.writeText(inviteEl.value); toast('Invites copied'); };
+
+      // View links (summary + each role)
+      const vgrid = el('viewLinksGrid');
+      if(vgrid){
+        const items = [
+          {label:'Overall Summary', view:'summary'},
+          {label: LABEL.hospital, view:'hospital'},
+          {label: LABEL.dc_regional, view:'dc_regional'},
+          {label: LABEL.dc_prime, view:'dc_prime'},
+          {label: LABEL.factory, view:'factory'}
+        ];
+        vgrid.innerHTML = items.map(v=>{
+          const vlink = `${base}?code=${encodeURIComponent(code)}&view=${encodeURIComponent(v.view)}&k=${encodeURIComponent(writeKey)}`;
+          return `<div class='p-3 bg-slate-50 rounded-lg'>
+            <div class='text-xs text-slate-500 mb-1'>${v.label}</div>
+            <input class='w-full text-xs font-mono border rounded p-1' value='${vlink}' readonly />
+            <button class='btn btn-secondary w-full mt-2' data-vlink='${vlink}'>Copy</button>
+          </div>`;
+        }).join('');
+        vgrid.querySelectorAll('button[data-vlink]').forEach(btn=>{
+          btn.onclick=async()=>{ await navigator.clipboard.writeText(btn.dataset.vlink); toast('Link copied'); };
+        });
+      }
     }
 
     function buildInviteText(code, cards){
@@ -260,10 +350,52 @@
         `Session ${code} — pick your link:`,
         ...cards.map(({r,link})=>`• ${LABEL[r]}: ${link}`)
       ];
+      // Use literal \n so this is safe in JS, and still renders properly inside the readonly <textarea>.
       return lines.join('\n');
     }
 
-    // Auto-join support via URL params (?code=...&k=...&role=hospital&n=Alice)
+    // Simple sparkline helpers for view links
+    function sparklinePath(values, width=360, height=90, pad=8){
+      const n=values.length; if(n===0) return '';
+      const min=Math.min(...values), max=Math.max(...values);
+      const span = (max-min)||1; const w=width-2*pad, h=height-2*pad; const dx = n>1? w/(n-1) : 0;
+      let d='';
+      for(let i=0;i<n;i++){
+        const x = pad + dx*i;
+        const y = pad + h - ((values[i]-min)/span)*h;
+        d += (i===0?'M':'L') + x.toFixed(2) + ' ' + y.toFixed(2) + ' ';
+      }
+      return d.trim();
+    }
+    function sparklineSVG(values,{width=360,height=90,pad=8,colorClass='text-sky-600'}={}){
+      const path = sparklinePath(values,width,height,pad);
+      return `<div class='${colorClass}'><svg width='${width}' height='${height}' viewBox='0 0 ${width} ${height}'><path d='${path}' fill='none' stroke='currentColor' stroke-width='2'/></svg></div>`;
+    }
+    function chartCard(label, values, big=false){
+      const w = big? 640 : 360; const h = big? 160 : 90;
+      return `<div class='p-4 bg-white rounded-xl shadow'>
+        <div class='text-sm text-slate-600 mb-2'>${label}</div>
+        ${sparklineSVG(values,{width:w,height:h})}
+        <div class='text-xs text-slate-500 mt-1'>Last: <b class='mono'>${values.at(-1)??0}</b></div>
+      </div>`;
+    }
+    function renderView(d){
+      const titleEl = el('viewTitle'); const body = el('viewBody');
+      const c=d.control; const ordersByRole={}; ROLES.forEach(r=>ordersByRole[r]=toIntMap(d.orders?.[r]||{}));
+      const S=compute(c,ordersByRole,d.currentWeek);
+      const vals=(r)=>{ const out=[]; for(let w=1; w<=d.currentWeek; w++){ out.push(S[r].onEnd[w]||0); } return out; };
+      if(viewTarget==='summary'){
+        titleEl.textContent = 'Overall Summary — Inventory Trend';
+        body.innerHTML = `<div class='grid md:grid-cols-2 lg:grid-cols-2 gap-4'>${ROLES.map(r=>chartCard(LABEL[r], vals(r))).join('')}</div>`;
+      } else if(ROLES.includes(viewTarget)){
+        titleEl.textContent = `${LABEL[viewTarget]} — Inventory Trend`;
+        body.innerHTML = chartCard(LABEL[viewTarget], vals(viewTarget), true);
+      } else {
+        titleEl.textContent = 'View'; body.innerHTML = `<div class='text-sm text-slate-600'>Unknown view key: <span class='font-mono'>${viewTarget}</span></div>`;
+      }
+    }
+
+    // Auto-join support via URL params (?code=...&k=...&role=hospital&n=Alice&view=summary)
     async function autoJoinFromURL(){
       try{
         if(!db) return; // firebase not configured
@@ -272,12 +404,18 @@
         const key  = qs.get('k') || '';
         const role = (qs.get('role') || '').toLowerCase();
         const name = qs.get('n') || '';
+        const view = (qs.get('view') || '').toLowerCase();
         if(!code) return;
         el('codeInput').value = code; if(key) el('passInput').value = key; if(name) el('nameInput').value = name;
         const ref = await joinSession(code);
         if(!ref) return;
         const s = await getDoc(ref);
         const wk = s.data()?.writeKey || '';
+        if(view){
+          viewMode = true; viewTarget = view;
+          attach(ref);
+          return;
+        }
         if(key && key===wk){
           writeKey = key; isInstructor=false; myName = name || 'Player';
           if(role && ROLES.includes(role)) { roleLocked = true; lockedRole = role; }
@@ -310,6 +448,7 @@
     // --- UI
     let sessionRef=null,isInstructor=false,myName='';
     let roleLocked=false, lockedRole='';
+    let viewMode=false, viewTarget='';
     el('createBtn').onclick=async()=>{ if(!db){alert('Add Firebase config first.');return;} const code=(el('codeInput').value||'').trim().toUpperCase(); const name=(el('nameInput').value||'').trim()||'Instructor'; const pass=(el('passInput').value||'').trim(); if(!code||!pass){alert('Enter code and passcode.');return;} writeKey=pass; const ref=await createSession(code,name); attach(ref); isInstructor=true; myName=name; setShareLinks(code); };
     el('joinBtn').onclick=async()=>{ if(!db){alert('Add Firebase config first.');return;} const code=(el('codeInput').value||'').trim().toUpperCase(); const name=(el('nameInput').value||'').trim()||'Player'; const pass=(el('passInput').value||'').trim(); if(!code){alert('Enter code.');return;} const ref=await joinSession(code); if(!ref){alert('Session not found.');return;} const s=await getDoc(ref); const wk=s.data()?.writeKey||''; if(!pass||pass!==wk){alert('Incorrect passcode.');return;} writeKey=pass; attach(ref); isInstructor=false; myName=name; };
     el('applyControlBtn').onclick=async()=>{ if(sessionRef) await applyControl(sessionRef); };
@@ -324,7 +463,11 @@
       document.getElementById('sessionCodeHdr').textContent=ref.id;
       document.getElementById('playerSessionCode').textContent=ref.id;
       document.getElementById('lobby').classList.add('hidden');
-      (isInstructor? document.getElementById('instructorPanel'):document.getElementById('playerPanel')).classList.remove('hidden');
+      const instr = document.getElementById('instructorPanel');
+      const player = document.getElementById('playerPanel');
+      const viewEl = document.getElementById('viewPanel');
+      if(viewMode){ viewEl.classList.remove('hidden'); instr.classList.add('hidden'); player.classList.add('hidden'); }
+      else { (isInstructor? instr : player).classList.remove('hidden'); viewEl.classList.add('hidden'); }
       onSnapshot(ref,
         (snap)=>{
           const d=snap.data(); if(!d) return;
@@ -333,8 +476,8 @@
           document.getElementById('transparencyChk').checked=!!d.transparency;
           clearError();
           setStatus('connected','green');
-          renderInstructor(d);
-          if(!isInstructor) renderPlayer(d);
+          if(viewMode) renderView(d);
+          else { renderInstructor(d); if(!isInstructor) renderPlayer(d); }
         },
         (err)=>{
           showError('Live update error: ' + err.message);
@@ -380,6 +523,12 @@
         (function(){
           const s = spanify([false,true,true,false,true,false,false,true]);
           console.assert(s==='2-3, 5, 8', 'spanify compaction failed: ' + s);
+        })();
+        (function(){ const p = sparklinePath([0,5,10], 100, 40, 4); console.assert(typeof p==='string' && p.startsWith('M') && p.includes('L'), 'sparkline path invalid'); })();
+        (function(){
+          const base='https://example.test/app';
+          const url = buildViewLink(base,'ABCD','summary');
+          console.assert(url.includes('view=summary') && url.includes('code=ABCD'), 'buildViewLink failed: ' + url);
         })();
         console.log('%cSelf-tests OK','color:green');
       }catch(e){ console.warn('Self-tests exception', e); }
