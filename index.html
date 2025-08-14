@@ -4,26 +4,44 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Hospital Supply Chain Game</title>
-  <!-- Tailwind (CDN) -->
+  <script>
+    tailwind.config = {
+      safelist: [
+        'bg-green-100','text-green-700',
+        'bg-amber-100','text-amber-700',
+        'bg-red-100','text-red-700'
+      ]
+    };
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .card { @apply bg-white shadow rounded-2xl p-5; }
-    .btn  { @apply px-4 py-2 rounded-xl shadow text-white; }
-    .btn-primary { @apply bg-blue-600 hover:bg-blue-700; }
-    .btn-secondary { @apply bg-slate-600 hover:bg-slate-700; }
-    .btn-danger { @apply bg-red-600 hover:bg-red-700; }
-    .pill { @apply px-2 py-0.5 text-xs rounded-full bg-slate-100; }
-    .mono { font-variant-numeric: tabular-nums; }
+    .card{background:#fff;border-radius:1rem;box-shadow:0 8px 24px rgba(2,6,23,.08);padding:1.25rem}
+    .btn{padding:.5rem 1rem;border-radius:.75rem;color:#fff;box-shadow:0 4px 10px rgba(2,6,23,.12)}
+    .btn-primary{background:#2563eb}.btn-primary:hover{background:#1d4ed8}
+    .btn-secondary{background:#475569}.btn-secondary:hover{background:#334155}
+    .pill{padding:.125rem .5rem;font-size:.75rem;border-radius:9999px;background:#f1f5f9}
+    .mono{font-variant-numeric:tabular-nums}
   </style>
+  <script>
+    // Small helper for copy feedback
+    function toast(msg){
+      const d=document.createElement('div');
+      d.textContent=msg; d.className='fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm px-3 py-2 rounded-lg shadow';
+      document.body.appendChild(d); setTimeout(()=>d.remove(),1200);
+    }
+  </script>
 </head>
 <body class="min-h-screen bg-slate-50">
-  <div class="max-w-7xl mx-auto p-6 space-y-6">
+  <div class="max-w-6xl mx-auto p-6 space-y-6">
     <header class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold">Hospital Supply Chain Game (Beer Game — Healthcare)</h1>
+      <h1 class="text-2xl font-bold">Hospital Supply Chain Game — Healthcare</h1>
       <span id="statusPill" class="pill">offline</span>
     </header>
 
-    <!-- LOBBY -->
+    <!-- Error banner -->
+    <div id="errorBanner" class="hidden mt-3 p-3 rounded-lg bg-red-100 text-red-700 text-sm"></div>
+
+    <!-- Lobby -->
     <section class="card" id="lobby">
       <h2 class="text-lg font-semibold mb-3">Lobby</h2>
       <div class="grid md:grid-cols-4 gap-4">
@@ -33,41 +51,41 @@
         </div>
         <div>
           <label class="block text-sm font-medium">Session Code</label>
-          <input id="codeInput" class="mt-1 w-full border rounded-lg p-2 uppercase" maxlength="8" placeholder="e.g., HSCG1234" />
+          <input id="codeInput" class="mt-1 w-full border rounded-lg p-2 uppercase" maxlength="8" placeholder="HSCG1234" />
         </div>
         <div>
-          <label class="block text-sm font-medium">Session Passcode</label>
-          <input id="passInput" class="mt-1 w-full border rounded-lg p-2" placeholder="e.g., 4-6 digits" />
+          <label class="block text-sm font-medium">Passcode</label>
+          <input id="passInput" class="mt-1 w-full border rounded-lg p-2" placeholder="4–6 digits" />
         </div>
         <div class="flex items-end gap-2">
-          <button id="createBtn" class="btn btn-primary">Create Session (Instructor)</button>
+          <button id="createBtn" class="btn btn-primary">Create (Instructor)</button>
           <button id="joinBtn" class="btn btn-secondary">Join (Player)</button>
         </div>
       </div>
       <details class="mt-4">
         <summary class="cursor-pointer text-slate-700">How it works</summary>
-        <ol class="list-decimal ml-5 mt-2 text-sm text-slate-600">
-          <li>Instructor creates a session and shares the <b>code</b>.</li>
-          <li>Each team joins and picks a <b>role</b> (Hospital / Regional DC / Prime Vendor DC / Manufacturer).</li>
-          <li>Game runs in <b>weeks</b>. Each week, players <b>enter a requisition</b> to upstream.</li>
-          <li>App computes shipments, receipts (with lead-time), inventory, backlog, fill-rate.</li>
-          <li>Instructor advances the week. Optionally enable <b>Transparency</b> to reveal all lanes.</li>
+        <ol class="list-decimal ml-6 mt-2 text-sm text-slate-600">
+          <li>Instructor creates a session and shares the code.</li>
+          <li>Players join, choose a role, and submit weekly requisitions.</li>
+          <li>App simulates shipments, receipts (lead time), inventory, backlog, and fill-rate.</li>
         </ol>
       </details>
     </section>
 
-    <!-- INSTRUCTOR PANEL -->
+    <!-- Instructor -->
     <section class="card hidden" id="instructorPanel">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold">Instructor Panel — <span id="sessionCodeHdr" class="font-mono"></span></h2>
-        <div class="flex items-center gap-2">
-          <label class="text-sm"><input type="checkbox" id="transparencyChk" class="mr-1"> Transparency On</label>
+        <h2 class="text-lg font-semibold">Instructor — <span id="sessionCodeHdr" class="font-mono"></span></h2>
+        <div class="flex items-center gap-3">
+          <label class="text-sm"><input id="transparencyChk" type="checkbox" class="mr-1">Transparency</label>
           <button id="advanceBtn" class="btn btn-primary">Advance Week</button>
+          <button id="resetBtn" class="btn btn-secondary">Reset Session</button>
         </div>
       </div>
+
       <div class="grid md:grid-cols-4 gap-4 mt-4">
         <div>
-          <label class="block text-sm font-medium">Item Name</label>
+          <label class="block text-sm font-medium">Item</label>
           <input id="itemName" class="mt-1 w-full border rounded-lg p-2" value="PPE - N95 Masks" />
         </div>
         <div>
@@ -75,31 +93,13 @@
           <input id="weeks" type="number" min="4" max="52" class="mt-1 w-full border rounded-lg p-2" value="24" />
         </div>
         <div>
-          <label class="block text-sm font-medium">Lead Time (weeks)</label>
+          <label class="block text-sm font-medium">Lead Time</label>
           <input id="leadTime" type="number" min="0" max="6" class="mt-1 w-full border rounded-lg p-2" value="2" />
         </div>
         <div>
-          <label class="block text-sm font-medium">Initial Inventory (all roles)</label>
+          <label class="block text-sm font-medium">Initial Inv</label>
           <input id="initInv" type="number" min="0" class="mt-1 w-full border rounded-lg p-2" value="120" />
         </div>
-        <div>
-          <label class="block text-sm font-medium">Inventory Cost ($/u/wk)</label>
-          <input id="invCost" type="number" step="0.01" class="mt-1 w-full border rounded-lg p-2" value="0.1" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium">Backorder Cost ($/u/wk)</label>
-          <input id="boCost" type="number" step="0.01" class="mt-1 w-full border rounded-lg p-2" value="50" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium">Expiration Cost ($/unit)</label>
-          <input id="expCost" type="number" step="0.01" class="mt-1 w-full border rounded-lg p-2" value="5" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium">Shelf Life (weeks)</label>
-          <input id="shelfLife" type="number" min="1" class="mt-1 w-full border rounded-lg p-2" value="8" />
-        </div>
-      </div>
-      <div class="grid md:grid-cols-3 gap-4 mt-4">
         <div>
           <label class="block text-sm font-medium">Scenario</label>
           <select id="scenario" class="mt-1 w-full border rounded-lg p-2">
@@ -108,19 +108,16 @@
             <option>Severe Surge + Recall</option>
           </select>
         </div>
-        <div class="md:col-span-2">
-          <label class="block text-sm font-medium">Base Weekly Consumption (comma-separated, length = Weeks)</label>
+        <div class="md:col-span-3">
+          <label class="block text-sm font-medium">Base Weekly Consumption (comma‑separated; length = Weeks)</label>
           <textarea id="baseDemand" rows="2" class="mt-1 w-full border rounded-lg p-2 font-mono text-sm"></textarea>
-          <p class="text-xs text-slate-500 mt-1">If left blank, the app seeds PPE defaults (100/wk with a flu surge in weeks 6–10).</p>
         </div>
-      </div>
-      <div class="grid md:grid-cols-2 gap-4 mt-4">
         <div>
-          <label class="block text-sm font-medium">Factory Outage Weeks (e.g., 14-16)</label>
+          <label class="block text-sm font-medium">Factory Outage Weeks</label>
           <input id="factoryOutage" class="mt-1 w-full border rounded-lg p-2" placeholder="14-16" />
         </div>
         <div>
-          <label class="block text-sm font-medium">Prime Vendor Outage Weeks (e.g., 18-19)</label>
+          <label class="block text-sm font-medium">Prime Vendor Outage Weeks</label>
           <input id="primeOutage" class="mt-1 w-full border rounded-lg p-2" placeholder="18-19" />
         </div>
       </div>
@@ -129,41 +126,31 @@
         <span class="text-sm text-slate-600">Current Week: <b id="currentWeekLbl">—</b></span>
       </div>
 
-      <div class="grid md:grid-cols-5 gap-3 mt-4">
-        <div class="md:col-span-2">
-          <label class="block text-sm font-medium">Preset Scenario</label>
-          <select id="presetSelect" class="mt-1 w-full border rounded-lg p-2">
-            <option value="none">(none)</option>
-            <option value="normal">Normal</option>
-            <option value="transparency">Transparency On</option>
-            <option value="severe">Severe Surge + Recall</option>
-            <option value="hurricane">Hurricane Prep</option>
-            <option value="strike">Supplier Strike</option>
-            <option value="outbreak">Viral Outbreak</option>
-          </select>
-        </div>
-        <div class="flex items-end gap-2">
-          <button id="applyPresetBtn" class="btn btn-secondary">Apply Preset</button>
-          <button id="exportCsvBtn" class="btn btn-primary">Export CSV</button>
-          <button id="demoBtn" class="btn btn-secondary">Demo Session Seed</button>
+      <!-- Shareable role links (auto-created after session creation) -->
+      <div id="shareLinks" class="hidden mt-4">
+        <h3 class="font-semibold mb-2">Share these links with players</h3>
+        <p class="text-xs text-slate-600 mb-2">Each link opens the game as a specific role and pre-fills the passcode. Share directly or copy the invite text.</p>
+        <div id="linksGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3"></div>
+        <div class="mt-3">
+          <label class="block text-sm font-medium mb-1">Invite text (email/Slack)</label>
+          <textarea id="inviteText" class="w-full border rounded-lg p-2 font-mono text-xs" rows="4" readonly></textarea>
+          <div class="mt-2 flex gap-2">
+            <button id="copyInvitesBtn" class="btn btn-secondary">Copy All Invites</button>
+          </div>
         </div>
       </div>
       <hr class="my-4" />
       <div id="scoreboard" class="overflow-x-auto"></div>
-      <div class="mt-4">
-        <h3 class="font-semibold mb-2">KPI Summary</h3>
-        <div id="kpiBox" class="overflow-x-auto"></div>
-      </div>
     </section>
 
-    <!-- PLAYER PANEL -->
+    <!-- Player -->
     <section class="card hidden" id="playerPanel">
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold">Player — <span id="playerNameHdr" class="font-mono"></span></h2>
         <div class="flex items-center gap-2">
-          <label class="block text-sm font-medium">Choose Role:</label>
+          <label class="text-sm">Role</label>
           <select id="roleSelect" class="border rounded-lg p-2">
-            <option value="hospital">Hospital Supply Closet</option>
+            <option value="hospital">Hospital</option>
             <option value="dc_regional">Regional DC</option>
             <option value="dc_prime">Prime Vendor DC</option>
             <option value="factory">Manufacturer</option>
@@ -174,487 +161,227 @@
       <div class="grid md:grid-cols-2 gap-4 mt-4">
         <div id="roleStats" class="space-y-2"></div>
         <div class="card bg-slate-50">
-          <h3 class="font-semibold mb-2">Your Requisition (to upstream)</h3>
+          <h3 class="font-semibold mb-2">Your Requisition</h3>
           <div class="flex items-center gap-2">
             <input id="orderInput" type="number" min="0" class="w-40 border rounded-lg p-2" placeholder="units" />
-            <button id="submitOrderBtn" class="btn btn-primary">Submit for this Week</button>
+            <button id="submitOrderBtn" class="btn btn-primary">Submit (this week)</button>
           </div>
-          <p class="text-xs text-slate-500 mt-2">Edit allowed only for the current week. Orders for past weeks are locked.</p>
-          <div id="lanePeek" class="mt-4"></div>
+          <div id="lanePeek" class="mt-4 text-sm text-slate-600"></div>
         </div>
       </div>
     </section>
 
-    <!-- FOOTER / SETUP -->
-    <section class="card">
+    <!-- Setup (hidden because config is hardcoded) -->
+    <section class="card hidden">
       <h2 class="text-lg font-semibold mb-3">Setup</h2>
-      <p class="text-sm text-slate-600 mb-2">Create a <b>Firebase</b> project (Firestore) and paste your Web App config below, then refresh. This enables real-time multi-user play.</p>
-      <textarea id="firebaseCfg" class="w-full border rounded-lg p-2 font-mono text-xs" rows="6" placeholder='{
-  "apiKey": "...",
-  "authDomain": "...",
-  "projectId": "...",
-  "storageBucket": "...",
-  "messagingSenderId": "...",
-  "appId": "..."
-}'></textarea>
+      <p class="text-sm text-slate-600 mb-2">Firebase config is <b>hardcoded</b> to your project; no action needed.</p>
+      <textarea id="firebaseCfg" class="w-full border rounded-lg p-2 font-mono text-xs opacity-60 cursor-not-allowed" rows="6" readonly></textarea>
       <div class="mt-2 flex items-center gap-2">
         <button id="saveCfgBtn" class="btn btn-secondary">Save Config</button>
-        <button id="hardResetBtn" class="btn btn-danger">Hard Reset (local)</button>
+        <button id="hardResetBtn" class="btn btn-secondary">Hard Reset (local)</button>
       </div>
-      <p class="text-xs text-slate-500 mt-2">Deploy this single file to Netlify/Vercel/GitHub Pages. Firestore Security Rules should restrict writes to the selected session path for classroom use.</p>
     </section>
   </div>
 
-  <!-- Firebase (modular v10 CDN) -->
+  <!-- App (lean) -->
   <script type="module">
-    // --- Firebase bootstrap ---
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js';
-    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 
-    // Persist / load config from localStorage
-    const cfgTextarea = document.getElementById('firebaseCfg');
-    const savedCfg = localStorage.getItem('hscg.firebase');
-    if (savedCfg) cfgTextarea.value = savedCfg;
+    // --- Firebase bootstrap (hardcoded config)
+    const HARDCODED_CFG = {
+      apiKey: "AIzaSyB2S2bJjgSGQ9wvCImvEU3VxQJGjNgHSl8",
+      authDomain: "jh-sc-game.firebaseapp.com",
+      projectId: "jh-sc-game",
+      storageBucket: "jh-sc-game.firebasestorage.app",
+      messagingSenderId: "359971857249",
+      appId: "1:359971857249:web:eb3f8605c260d0b46edb20",
+      measurementId: "G-R081YTPNK3"
+    };
 
-    let app = null, db = null; let writeKey = ''; // session passcode used for writes
-    function initFirebase() {
-      try {
-        const cfg = JSON.parse(cfgTextarea.value || '{}');
-        app = initializeApp(cfg);
-        db = getFirestore(app);
-        document.getElementById('statusPill').textContent = 'connected';
-        document.getElementById('statusPill').className = 'pill bg-green-100 text-green-700';
-      } catch (e) {
-        document.getElementById('statusPill').textContent = 'config needed';
-        document.getElementById('statusPill').className = 'pill bg-amber-100 text-amber-700';
-      }
+    const cfgEl = document.getElementById('firebaseCfg');
+    if (cfgEl) {
+      cfgEl.value = JSON.stringify(HARDCODED_CFG, null, 2);
+      cfgEl.readOnly = true;
+      cfgEl.classList.add('opacity-60','cursor-not-allowed');
     }
-    initFirebase();
+    let app=null, db=null, writeKey='';
+    function init(){
+      try{ app = initializeApp(HARDCODED_CFG); db = getFirestore(app); setStatus('connected','green'); }
+      catch(e){ setStatus('config error','red'); console.error(e); }
+    }
+    function setStatus(text,color){ const p=document.getElementById('statusPill'); p.textContent=text; p.className=`pill bg-${color}-100 text-${color}-700`; }
+    init();
+    document.getElementById('saveCfgBtn').onclick=()=>{ toast('Config is hardcoded'); };
+    document.getElementById('hardResetBtn').onclick=()=>{ localStorage.clear(); location.reload(); };
 
-    document.getElementById('saveCfgBtn').onclick = () => {
-      localStorage.setItem('hscg.firebase', cfgTextarea.value);
-      location.reload();
-    };
-    document.getElementById('hardResetBtn').onclick = () => {
-      localStorage.clear(); location.reload();
-    };
+    // --- Model & helpers
+    const ROLES=['hospital','dc_regional','dc_prime','factory'];
+    const LABEL={hospital:'Hospital',dc_regional:'Regional DC',dc_prime:'Prime Vendor DC',factory:'Manufacturer'};
+    const sessionsCol=()=>collection(db,'sessions');
+    function seedBase(weeks){ return Array.from({length:weeks},(_,i)=>{const w=i+1; return Math.round(100*(w>=6&&w<=10?1.5:1));}); }
+    function parseRanges(str,weeks){ const f=Array.from({length:weeks},()=>false); (str||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(t=>{ if(/^\d+$/.test(t)){const w=+t; if(w>=1&&w<=weeks) f[w-1]=true; } else { const m=t.match(/^(\d+)\s*[-:]\s*(\d+)$/); if(m){ let a=+m[1],b=+m[2]; if(a>b)[a,b]=[b,a]; for(let w=a;w<=b&&w<=weeks;w++) f[w-1]=true; } } }); return f; }
+    function effCons(scn,base,week){ return scn==='Severe Surge + Recall' ? Math.round((base[week-1]||0)*(week>=6&&week<=12?1.8:1)) : (base[week-1]||0); }
+    function controlFromUI(){ const weeks=+el('weeks').value||24; const baseTxt=(el('baseDemand').value||'').trim(); let base=baseTxt? baseTxt.split(',').map(x=>+x.trim()||0).slice(0,weeks) : seedBase(weeks); if(base.length<weeks) base=base.concat(Array(weeks-base.length).fill(base.at(-1)||0)); return { itemName:el('itemName').value||'PPE - N95 Masks', weeks, leadTime:+el('leadTime').value||2, initInv:+el('initInv').value||120, scenario:el('scenario').value, baseConsumption:base, factoryOutage:parseRanges(el('factoryOutage').value,weeks), primeOutage:parseRanges(el('primeOutage').value,weeks) }; }
+    function compute(control,ordersByRole,currentWeek){ const W=Math.min(currentWeek,control.weeks),L=control.leadTime,S={}; ROLES.forEach(r=>S[r]={onStart:Array(W+1).fill(0),boStart:Array(W+1).fill(0),rcv:Array(W+1).fill(0),dem:Array(W+1).fill(0),ship:Array(W+1).fill(0),onEnd:Array(W+1).fill(0),boEnd:Array(W+1).fill(0),fill:Array(W+1).fill(1)}); ROLES.forEach(r=>S[r].onStart[1]=control.initInv); const ORD=(r,w)=>ordersByRole[r]?.[w]??0; for(let w=1;w<=W;w++){ S.hospital.dem[w]=effCons(control.scenario,control.baseConsumption,w); S.dc_regional.dem[w]=ORD('hospital',w); S.dc_prime.dem[w]=ORD('dc_regional',w); S.factory.dem[w]=ORD('dc_prime',w); const up=r=>r==='hospital'?'dc_regional':r==='dc_regional'?'dc_prime':r==='dc_prime'?'factory':null; ROLES.forEach(r=>{ const u=up(r); const arr=(w-L)>=1?(S[u]?.ship[w-L]||0):0; S[r].rcv[w]=u?arr:0; }); ROLES.forEach(r=>{ const X=S[r]; const supply=(X.onStart[w]||0)+(X.rcv[w]||0); const need=(X.dem[w]||0)+(X.boStart[w]||0); let ship=Math.min(supply,need); if(r==='factory'&&control.factoryOutage[w-1]) ship=0; if(r==='dc_prime'&&control.primeOutage[w-1]) ship=0; X.ship[w]=ship; X.onEnd[w]=supply-ship; X.boEnd[w]=Math.max(need-supply,0); X.fill[w]=need>0?ship/need:1; }); if(w<W){ ROLES.forEach(r=>{ S[r].onStart[w+1]=S[r].onEnd[w]; S[r].boStart[w+1]=S[r].boEnd[w]; }); } } return S; }
+    function toIntMap(o){ const m={}; Object.entries(o||{}).forEach(([k,v])=>m[+k]=+v||0); return m; }
+    const el=id=>document.getElementById(id);
+    function showError(msg){ const b=el('errorBanner'); if(!b) return; b.textContent = msg; b.classList.remove('hidden'); }
+    function clearError(){ const b=el('errorBanner'); if(!b) return; b.textContent=''; b.classList.add('hidden'); }
 
-    // --- Domain Model ---
-    const ROLES = ['hospital','dc_regional','dc_prime','factory'];
-    const ROLE_LABEL = {
-      hospital: 'Hospital Supply Closet',
-      dc_regional: 'Regional DC',
-      dc_prime: 'Prime Vendor DC',
-      factory: 'Manufacturer',
-    };
-
-    // Default PPE seeds
-    function seedBaseDemand(weeks=24){
-      return Array.from({length:weeks}, (_,i)=>{
-        const w=i+1; const base=100; return Math.round(base * (w>=6 && w<=10 ? 1.5 : 1.0));
+    // Build and show four shareable URLs (one per role)
+    function setShareLinks(code){
+      const base = location.origin + location.pathname;
+      const grid = el('linksGrid');
+      const cards = ROLES.map(r=>{
+        const link = `${base}?code=${encodeURIComponent(code)}&role=${encodeURIComponent(r)}&k=${encodeURIComponent(writeKey)}`;
+        return { r, link };
       });
-    }
-    function parseRanges(str, weeks){
-      // e.g. "14-16, 20" => boolean array length weeks
-      const out = Array.from({length:weeks},()=>false);
-      (str||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(tok=>{
-        if(/^-?\d+$/.test(tok)){ const w=+tok; if(w>=1&&w<=weeks) out[w-1]=true; }
-        const m = tok.match(/^(\d+)\s*[-:]\s*(\d+)$/);
-        if(m){ let a=+m[1], b=+m[2]; if(a>b) [a,b]=[b,a];
-          for(let w=a; w<=b && w<=weeks; w++) out[w-1]=true;
-        }
+      grid.innerHTML = cards.map(({r,link})=>
+        `<div class='p-3 bg-slate-50 rounded-lg'>
+          <div class='text-xs text-slate-500 mb-1'>${LABEL[r]}</div>
+          <input class='w-full text-xs font-mono border rounded p-1' value='${link}' readonly />
+          <button class='btn btn-secondary w-full mt-2' data-link='${link}'>Copy</button>
+        </div>`
+      ).join('');
+      el('shareLinks').classList.remove('hidden');
+      grid.querySelectorAll('button[data-link]').forEach(btn=>{
+        btn.onclick=async()=>{ await navigator.clipboard.writeText(btn.dataset.link); toast('Link copied'); };
       });
-      return out;
+      const invite = buildInviteText(code, cards);
+      const inviteEl = el('inviteText'); inviteEl.value = invite;
+      el('copyInvitesBtn').onclick = async ()=>{ await navigator.clipboard.writeText(inviteEl.value); toast('Invites copied'); };
     }
 
-    function effectiveConsumption(scn, base, week){
-      if(scn==='Severe Surge + Recall'){
-        // amplify weeks 6–12 by 1.8x
-        const idx=week-1; const val = base[idx]||0; return Math.round(val * (week>=6 && week<=12 ? 1.8 : 1));
-      }
-      return base[week-1]||0; // Normal and Transparency
+    function buildInviteText(code, cards){
+      const lines = [
+        `Session ${code} — pick your link:`,
+        ...cards.map(({r,link})=>`• ${LABEL[r]}: ${link}`)
+      ];
+      return lines.join('\n');
     }
 
-    function buildControlFromUI(){
-      const weeks = +document.getElementById('weeks').value || 24;
-      const baseTxt = (document.getElementById('baseDemand').value||'').trim();
-      let base = baseTxt ? baseTxt.split(',').map(x=>+x.trim()||0).slice(0,weeks) : seedBaseDemand(weeks);
-      if(base.length<weeks){ base = base.concat(Array(weeks-base.length).fill(base.at(-1)||0)); }
-      const control = {
-        itemName: document.getElementById('itemName').value||'PPE - N95 Masks',
-        weeks,
-        leadTime: +document.getElementById('leadTime').value||2,
-        initInv: +document.getElementById('initInv').value||120,
-        invCost: +document.getElementById('invCost').value||0.1,
-        boCost: +document.getElementById('boCost').value||50,
-        expCost: +document.getElementById('expCost').value||5.0,
-        shelfLifeWeeks: +document.getElementById('shelfLife').value||8,
-        scenario: document.getElementById('scenario').value,
-        baseConsumption: base,
-        factoryOutage: parseRanges(document.getElementById('factoryOutage').value, weeks),
-        primeOutage: parseRanges(document.getElementById('primeOutage').value, weeks),
-      };
-      return control;
-    }
-
-    // Compute all lanes up to currentWeek from control + orders
-    function computeGame(control, ordersByRole, currentWeek){
-      const W = Math.min(currentWeek, control.weeks);
-      const L = control.leadTime;
-      const roles = ROLES;
-      const state = {};
-      roles.forEach(r=>{ state[r] = {
-        onHandStart: Array(W+1).fill(0), // 1..W
-        unfilledStart: Array(W+1).fill(0),
-        receipts: Array(W+1).fill(0),
-        demandSeen: Array(W+1).fill(0),
-        ship: Array(W+1).fill(0),
-        onHandEnd: Array(W+1).fill(0),
-        unfilledEnd: Array(W+1).fill(0),
-        fillRate: Array(W+1).fill(1),
-      };});
-      // init inventories
-      roles.forEach(r=>{ state[r].onHandStart[1] = control.initInv; });
-
-      // helper to get orders for a role/week (missing => 0)
-      const ORD = (role, w)=> (ordersByRole[role]?.[w] ?? 0);
-
-      for(let w=1; w<=W; w++){
-        // Demand each role sees
-        state.hospital.demandSeen[w] = effectiveConsumption(control.scenario, control.baseConsumption, w);
-        state.dc_regional.demandSeen[w] = ORD('hospital', w);
-        state.dc_prime.demandSeen[w] = ORD('dc_regional', w);
-        state.factory.demandSeen[w] = ORD('dc_prime', w);
-
-        // Receipts are upstream shipments delayed by L
-        const getUp = (role)=> role==='hospital' ? 'dc_regional' : role==='dc_regional' ? 'dc_prime' : role==='dc_prime' ? 'factory' : null;
-        roles.forEach(role=>{
-          const up = getUp(role);
-          const arrivesFrom = (w-L)>=1 ? (state[up]?.ship[w-L] || 0) : 0;
-          state[role].receipts[w] = up? arrivesFrom : 0;
-        });
-
-        // Shipments with outage gates
-        roles.forEach(role=>{
-          const S = state[role];
-          const supplyAvail = (S.onHandStart[w]||0) + (S.receipts[w]||0);
-          const demandPlusBacklog = (S.demandSeen[w]||0) + (S.unfilledStart[w]||0);
-          let ship = Math.min(supplyAvail, demandPlusBacklog);
-          if(role==='factory' && control.factoryOutage[w-1]) ship = 0;
-          if(role==='dc_prime' && control.primeOutage[w-1]) ship = 0;
-          S.ship[w] = ship;
-          S.onHandEnd[w] = supplyAvail - ship;
-          S.unfilledEnd[w] = Math.max(demandPlusBacklog - supplyAvail, 0);
-          S.fillRate[w] = demandPlusBacklog>0 ? (ship/demandPlusBacklog) : 1;
-        });
-
-        // Roll to next week (start values)
-        if(w < W){
-          roles.forEach(role=>{
-            state[role].onHandStart[w+1] = state[role].onHandEnd[w];
-            state[role].unfilledStart[w+1] = state[role].unfilledEnd[w];
-          });
+    // Auto-join support via URL params (?code=...&k=...&role=hospital&n=Alice)
+    async function autoJoinFromURL(){
+      try{
+        if(!db) return; // firebase not configured
+        const qs = new URLSearchParams(location.search);
+        const code = (qs.get('code')||'').toUpperCase();
+        const key  = qs.get('k') || '';
+        const role = (qs.get('role') || '').toLowerCase();
+        const name = qs.get('n') || '';
+        if(!code) return;
+        el('codeInput').value = code; if(key) el('passInput').value = key; if(name) el('nameInput').value = name;
+        const ref = await joinSession(code);
+        if(!ref) return;
+        const s = await getDoc(ref);
+        const wk = s.data()?.writeKey || '';
+        if(key && key===wk){
+          writeKey = key; isInstructor=false; myName = name || 'Player';
+          if(role && ROLES.includes(role)) { roleLocked = true; lockedRole = role; }
+          attach(ref);
+          if(role && ROLES.includes(role)){
+            setTimeout(()=>{ const sel=el('roleSelect'); if(sel){ sel.value = lockedRole; renderPlayer(s.data()); } }, 0);
+          }
         }
+      }catch(e){ /* silent */ }
+    }
+
+    // --- Firestore ops (passcode protected)
+    async function createSession(code,name){ const control=controlFromUI(); const ref=doc(sessionsCol(),code); await update(ref,{ code,instructor:name,createdAt:serverTimestamp(),currentWeek:1,transparency:false,control,orders:{},writeKey:writeKey||'CLASS' }, true); return ref; }
+    async function joinSession(code){ const ref=doc(sessionsCol(),code); const s=await getDoc(ref); return (s && s.exists())?ref:null; }
+    async function setTransparency(ref,val){ await update(ref,{ transparency:!!val, writeKey }); }
+    async function advanceWeek(ref){ const s=await getDoc(ref); if(!s.exists()) return; const cur=s.data().currentWeek||1; const W=s.data().control.weeks||24; await update(ref,{ currentWeek:Math.min(cur+1,W), writeKey }); }
+    async function applyControl(ref){ await update(ref,{ control:controlFromUI(), currentWeek:1, orders:{}, writeKey }); }
+    async function resetSession(ref){ const s=await getDoc(ref); if(!s.exists()) return; await update(ref,{ currentWeek:1, orders:{}, writeKey }); }
+    async function submitOrder(ref,role,week,qty){ const s=await getDoc(ref); const orders=s.data().orders||{}; const r=orders[role]||{}; r[week]=Math.max(0,Math.floor(+qty||0)); orders[role]=r; await update(ref,{ orders, writeKey }); }
+    async function update(ref,payload,create=false){
+      try{
+        return create? setDoc(ref,payload) : updateDoc(ref,payload);
+      }catch(e){
+        const msg = (e && e.message) ? e.message : 'Unknown write error';
+        showError('Write failed: ' + msg + (e?.code ? ` (code: ${e.code})` : ''));
+        throw e;
       }
-      return state;
     }
 
-    // --- Firestore helpers ---
-    const sessionsCol = () => collection(db, 'sessions');
+    // --- UI
+    let sessionRef=null,isInstructor=false,myName='';
+    let roleLocked=false, lockedRole='';
+    el('createBtn').onclick=async()=>{ if(!db){alert('Add Firebase config first.');return;} const code=(el('codeInput').value||'').trim().toUpperCase(); const name=(el('nameInput').value||'').trim()||'Instructor'; const pass=(el('passInput').value||'').trim(); if(!code||!pass){alert('Enter code and passcode.');return;} writeKey=pass; const ref=await createSession(code,name); attach(ref); isInstructor=true; myName=name; setShareLinks(code); };
+    el('joinBtn').onclick=async()=>{ if(!db){alert('Add Firebase config first.');return;} const code=(el('codeInput').value||'').trim().toUpperCase(); const name=(el('nameInput').value||'').trim()||'Player'; const pass=(el('passInput').value||'').trim(); if(!code){alert('Enter code.');return;} const ref=await joinSession(code); if(!ref){alert('Session not found.');return;} const s=await getDoc(ref); const wk=s.data()?.writeKey||''; if(!pass||pass!==wk){alert('Incorrect passcode.');return;} writeKey=pass; attach(ref); isInstructor=false; myName=name; };
+    el('applyControlBtn').onclick=async()=>{ if(sessionRef) await applyControl(sessionRef); };
+    el('advanceBtn').onclick=async()=>{ if(sessionRef) await advanceWeek(sessionRef); };
+    el('transparencyChk').onchange=async(e)=>{ if(sessionRef) await setTransparency(sessionRef,e.target.checked); };
+    el('submitOrderBtn').onclick=async()=>{ const role=el('roleSelect').value; const qty=el('orderInput').value; const s=await getDoc(sessionRef); const w=s.data().currentWeek; await submitOrder(sessionRef,role,w,qty); };
+    el('roleSelect').onchange=()=>{ if(roleLocked){ el('roleSelect').value = lockedRole; toast('Role is locked by invite link'); return; } renderPlayer(); };
+    el('resetBtn').onclick=async()=>{ if(sessionRef) await resetSession(sessionRef); };
 
-    async function createSession(code, instructorName){
-      const control = buildControlFromUI();
-      const docRef = doc(sessionsCol(), code);
-      const payload = {
-        code,
-        instructor: instructorName,
-        createdAt: serverTimestamp(),
-        currentWeek: 1,
-        transparency: false,
-        control,
-        orders: {},
-        writeKey: writeKey || 'CLASS' // set from UI; default fallback
-      };
-      await setDoc(docRef, payload);
-      return docRef;
-    }
-
-    async function joinSession(code){
-      const docRef = doc(sessionsCol(), code);
-      const snap = await getDoc(docRef);
-      return snap.exists() ? docRef : null;
-    }
-
-    async function setTransparency(docRef, value){ await updateDoc(docRef, { transparency: !!value, writeKey }); }); }); }
-    async function advanceWeek(docRef){ const snap=await getDoc(docRef); const cur=snap.data().currentWeek||1; const W=snap.data().control.weeks||24; await updateDoc(docRef,{ currentWeek: Math.min(cur+1, W), writeKey }); }); }); }
-    async function applyControl(docRef){ const control=buildControlFromUI(); await updateDoc(docRef,{ control, currentWeek:1, orders:{}, writeKey }); }, writeKey }); } }); }
-
-    async function submitOrder(docRef, role, week, qty){
-      const snap = await getDoc(docRef);
-      const orders = snap.data().orders || {};
-      const rmap = orders[role] || {};
-      rmap[week] = Math.max(0, Math.floor(+qty||0));
-      orders[role] = rmap;
-      await updateDoc(docRef, { orders, writeKey });
-    }
-
-    // --- UI wiring ---
-    const nameInput = document.getElementById('nameInput');
-    const codeInput = document.getElementById('codeInput');
-    const createBtn = document.getElementById('createBtn');
-    const joinBtn = document.getElementById('joinBtn');
-
-    const instructorPanel = document.getElementById('instructorPanel');
-    const playerPanel = document.getElementById('playerPanel');
-
-    let sessionRef = null; let isInstructor = false; let myName = '';
-
-    createBtn.onclick = async () => {
-      if(!db) { alert('Add Firebase config first.'); return; }
-      const code = (codeInput.value||'').trim().toUpperCase();
-      const name = (nameInput.value||'').trim() || 'Instructor';
-      const pass = (document.getElementById('passInput').value||'').trim();
-      if(!code) { alert('Enter a session code.'); return; }
-      if(!pass) { alert('Enter a session passcode.'); return; }
-      writeKey = pass;
-      const ref = await createSession(code, name);
-      attachSession(ref); isInstructor = true; myName = name;
-    };
-
-    joinBtn.onclick = async () => {
-      if(!db) { alert('Add Firebase config first.'); return; }
-      const code = (codeInput.value||'').trim().toUpperCase();
-      const name = (nameInput.value||'').trim() || 'Player';
-      const pass = (document.getElementById('passInput').value||'').trim();
-      if(!code) { alert('Enter a session code.'); return; }
-      const ref = await joinSession(code);
-      if(!ref){ alert('Session not found.'); return; }
-      // Verify passcode against session doc
-      const snap = await getDoc(ref);
-      const wk = snap.data()?.writeKey || '';
-      if(!pass || pass!==wk){ alert('Incorrect passcode for this session.'); return; }
-      writeKey = pass;
-      attachSession(ref); isInstructor = false; myName = name;
-    };
-
-    // Instructor controls
-    document.getElementById('applyControlBtn').onclick = async ()=>{ if(sessionRef) await applyControl(sessionRef); };
-    document.getElementById('applyPresetBtn').onclick = async ()=>{ if(sessionRef) await applyPreset(sessionRef); };
-    document.getElementById('exportCsvBtn').onclick = async ()=>{ if(sessionRef){ const snap=await getDoc(sessionRef); exportCsv(snap.data()); }};
-    document.getElementById('demoBtn').onclick = async ()=>{ if(sessionRef){ await seedDemo(sessionRef); }};
-    document.getElementById('advanceBtn').onclick = async ()=>{ if(sessionRef) await advanceWeek(sessionRef); };
-    document.getElementById('transparencyChk').onchange = async (e)=>{ if(sessionRef) await setTransparency(sessionRef, e.target.checked); };
-
-    // Player controls
-    document.getElementById('submitOrderBtn').onclick = async ()=>{
-      const role = document.getElementById('roleSelect').value;
-      const qty = document.getElementById('orderInput').value;
-      const snap = await getDoc(sessionRef);
-      const { currentWeek } = snap.data();
-      await submitOrder(sessionRef, role, currentWeek, qty);
-    };
-
-    document.getElementById('roleSelect').onchange = renderPlayer;
-
-    function attachSession(ref){
-      sessionRef = ref;
-      document.getElementById('sessionCodeHdr').textContent = ref.id;
-      document.getElementById('playerSessionCode').textContent = ref.id;
+    function attach(ref){
+      sessionRef=ref;
+      document.getElementById('sessionCodeHdr').textContent=ref.id;
+      document.getElementById('playerSessionCode').textContent=ref.id;
       document.getElementById('lobby').classList.add('hidden');
-      if(isInstructor){ instructorPanel.classList.remove('hidden'); playerPanel.classList.add('hidden'); } else { playerPanel.classList.remove('hidden'); instructorPanel.classList.add('hidden'); }
-
-      onSnapshot(ref, (snap)=>{
-        const data = snap.data(); if(!data) return;
-        document.getElementById('currentWeekLbl').textContent = data.currentWeek;
-        document.getElementById('playerWeekLbl').textContent = data.currentWeek;
-        document.getElementById('transparencyChk').checked = !!data.transparency;
-        renderInstructor(data); if(!isInstructor) renderPlayer(data);
-      });
-    }
-
-    function renderInstructor(data){
-      // Fill control UI with current values
-      const c=data.control;
-      document.getElementById('itemName').value = c.itemName;
-      document.getElementById('weeks').value = c.weeks;
-      document.getElementById('leadTime').value = c.leadTime;
-      document.getElementById('initInv').value = c.initInv;
-      document.getElementById('invCost').value = c.invCost;
-      document.getElementById('boCost').value = c.boCost;
-      document.getElementById('expCost').value = c.expCost;
-      document.getElementById('shelfLife').value = c.shelfLifeWeeks;
-      document.getElementById('scenario').value = c.scenario;
-      document.getElementById('factoryOutage').value = spanifyRanges(c.factoryOutage);
-      document.getElementById('primeOutage').value = spanifyRanges(c.primeOutage);
-      document.getElementById('baseDemand').value = (c.baseConsumption||[]).join(', ');
-
-      // Build scoreboard
-      const ordersByRole = {}; ROLES.forEach(r=>{ ordersByRole[r] = toIntMap(data.orders?.[r]||{}); });
-      const state = computeGame(c, ordersByRole, data.currentWeek);
-
-      const tbl = document.createElement('table'); tbl.className = 'w-full text-sm';
-      tbl.innerHTML = `
-        <thead>
-          <tr class="text-left text-slate-500">
-            <th class="py-2">Role</th>
-            <th>Last Ship</th>
-            <th>On-hand</th>
-            <th>Backlog</th>
-            <th>Fill%</th>
-            <th>Order (wk ${data.currentWeek})</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${ROLES.map(r=>{ const S=state[r]; const w=data.currentWeek; const lastShip=S.ship[w]||0; const oh=S.onHandEnd[w]||S.onHandStart[w]||0; const bl=S.unfilledEnd[w]||S.unfilledStart[w]||0; const fr=((S.fillRate[w]||1)*100).toFixed(0)+'%'; const ord = ordersByRole[r][w]||0; return `<tr class="border-t"><td class="py-1">${ROLE_LABEL[r]}</td><td class="mono">${lastShip}</td><td class="mono">${oh}</td><td class="mono">${bl}</td><td class="mono">${fr}</td><td class="mono">${ord}</td></tr>`; }).join('')}
-        </tbody>`;
-      const box = document.getElementById('scoreboard'); box.innerHTML=''; box.appendChild(tbl);
-
-      // KPI Summary
-      const kpi = computeKPIs(c, state, data.currentWeek);
-      const kpiTbl = document.createElement('table'); kpiTbl.className='w-full text-sm';
-      kpiTbl.innerHTML = `
-        <thead>
-          <tr class="text-left text-slate-500">
-            <th class="py-2">Role</th>
-            <th>Avg Fill%</th>
-            <th>Total Inv Cost</th>
-            <th>Total Backorder Cost</th>
-            <th>Total Expiration Cost</th>
-            <th>Total Cost</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${ROLES.map(r=>{ const R=kpi.perRole[r]; return `<tr class='border-t'><td class='py-1'>${ROLE_LABEL[r]}</td><td class='mono'>${(R.fillRateAvg*100).toFixed(0)}%</td><td class='mono'>${R.invCost.toFixed(2)}</td><td class='mono'>${R.boCost.toFixed(2)}</td><td class='mono'>${R.expCost.toFixed(2)}</td><td class='mono'>${R.total.toFixed(2)}</td></tr>`;}).join('')}
-          <tr class='border-t font-semibold'><td class='py-1'>Supply Chain Total</td><td class='mono'>${(kpi.totals.fillRateAvg*100).toFixed(0)}%</td><td class='mono'>${kpi.totals.invCost.toFixed(2)}</td><td class='mono'>${kpi.totals.boCost.toFixed(2)}</td><td class='mono'>${kpi.totals.expCost.toFixed(2)}</td><td class='mono'>${kpi.totals.total.toFixed(2)}</td></tr>
-        </tbody>`;
-      const kbox = document.getElementById('kpiBox'); kbox.innerHTML=''; kbox.appendChild(kpiTbl);
-    }
-
-    function renderPlayer(data){
-      document.getElementById('playerNameHdr').textContent = myName || 'Player';
-      const role = document.getElementById('roleSelect').value;
-      const c = data?.control || buildControlFromUI();
-      const ordersByRole = {};
-      ROLES.forEach(r=>{ ordersByRole[r] = toIntMap(data?.orders?.[r]||{}); });
-      const state = computeGame(c, ordersByRole, data?.currentWeek||1);
-      const w = data?.currentWeek||1;
-
-      // Show lane stats
-      const S = state[role];
-      const html = `
-        <div class="card">
-          <div class="text-sm text-slate-600">${ROLE_LABEL[role]} — Week ${w}</div>
-          <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
-            <div>Orders from downstream</div><div class="mono">${S.demandSeen[w]||0}</div>
-            <div>Receipts (delayed)</div><div class="mono">${S.receipts[w]||0}</div>
-            <div>Ship to downstream</div><div class="mono">${S.ship[w]||0}</div>
-            <div>On-hand end</div><div class="mono">${S.onHandEnd[w]||S.onHandStart[w]||0}</div>
-            <div>Backlog end</div><div class="mono">${S.unfilledEnd[w]||S.unfilledStart[w]||0}</div>
-            <div>Fill rate</div><div class="mono">${((S.fillRate[w]||1)*100).toFixed(0)}%</div>
-          </div>
-        </div>`;
-      document.getElementById('roleStats').innerHTML = html;
-
-      // Show transparency peek
-      const peek = document.getElementById('lanePeek');
-      if(data?.transparency){
-        peek.innerHTML = `<div class="mt-2"><b>All Lanes (Week ${w})</b><div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">${ROLES.map(r=>{
-          const X = state[r];
-          return `<div class='p-3 bg-white rounded-xl shadow'><div class='text-xs text-slate-500'>${ROLE_LABEL[r]}</div>
-            <div class='text-sm'>Ship: <b class='mono'>${X.ship[w]||0}</b></div>
-            <div class='text-sm'>OH: <b class='mono'>${X.onHandEnd[w]||0}</b></div>
-            <div class='text-sm'>BO: <b class='mono'>${X.unfilledEnd[w]||0}</b></div>
-          </div>`;}).join('')}</div></div>`;
-      } else { peek.innerHTML = '<div class="text-xs text-slate-500">Transparency Off</div>'; }
-
-      // Lock order input for past weeks
-      const myOrd = ordersByRole[role][w] || '';
-      const orderInput = document.getElementById('orderInput');
-      orderInput.value = myOrd; orderInput.disabled = false;
-    }
-
-    function toIntMap(obj){ const out={}; Object.entries(obj||{}).forEach(([k,v])=> out[+k]=+v||0 ); return out; }
-    function spanifyRanges(flags){
-      // convert boolean array into compact string (e.g., 14-16, 18-19)
-      let s=''; let i=0; const W = flags?.length||0;
-      while(i<W){ if(flags[i]){ let j=i; while(j+1<W && flags[j+1]) j++; s += (s? ', ':'') + (i+1) + (i===j? '': '-' + (j+1)); i=j+1; } else i++; }
-      return s;
-    }
-
-    // ---- Presets, KPI, CSV, Demo helpers ----
-    function movingAvg(arr, idx, span){ let s=0,c=0; for(let i=idx-span+1;i<=idx;i++){ if(i>=0){ s+=arr[i]||0; c++; } } return c? s/c : 0; }
-
-    function computeKPIs(control, state, W){
-      const out={ perRole:{}, totals:{invCost:0,boCost:0,expCost:0,total:0,fillRateAvg:0} };
-      const invC=control.invCost, boC=control.boCost, expC=control.expCost, SL=control.shelfLifeWeeks||8;
-      let fSum=0,fCnt=0;
-      ROLES.forEach(r=>{
-        let inv=0,bo=0,exp=0,fr=0,fc=0;
-        for(let w=1; w<=W; w++){
-          const S=state[r];
-          inv += (S.onHandEnd[w]||0)*invC;
-          bo  += (S.unfilledEnd[w]||0)*boC;
-          const denom=(S.demandSeen[w]||0)+(S.unfilledStart[w]||0);
-          if(denom>0){ fr += (S.ship[w]||0)/denom; fc++; }
-          const avgDem = (r==='hospital') ? movingAvg(control.baseConsumption,w-1,4)
-                                          : movingAvg(S.demandSeen,w-1,4);
-          const onh=S.onHandEnd[w]||0; const woh=avgDem>0? onh/avgDem:0;
-          const expUnits = woh>SL ? ((woh-SL)/woh)*onh : 0;
-          exp += expUnits*expC;
+      (isInstructor? document.getElementById('instructorPanel'):document.getElementById('playerPanel')).classList.remove('hidden');
+      onSnapshot(ref,
+        (snap)=>{
+          const d=snap.data(); if(!d) return;
+          document.getElementById('currentWeekLbl').textContent=d.currentWeek;
+          document.getElementById('playerWeekLbl').textContent=d.currentWeek;
+          document.getElementById('transparencyChk').checked=!!d.transparency;
+          clearError();
+          setStatus('connected','green');
+          renderInstructor(d);
+          if(!isInstructor) renderPlayer(d);
+        },
+        (err)=>{
+          showError('Live update error: ' + err.message);
+          setStatus('live error','amber');
         }
-        const total=inv+bo+exp; const fra=fc? fr/fc : 1;
-        out.perRole[r]={invCost:inv,boCost:bo,expCost:exp,total,fillRateAvg:fra};
-        out.totals.invCost+=inv; out.totals.boCost+=bo; out.totals.expCost+=exp; out.totals.total+=total; fSum+=fr; fCnt+=fc;
-      });
-      out.totals.fillRateAvg = fCnt? fSum/fCnt : 1; return out;
+      );
     }
 
-    function exportCsv(data){
-      const c=data.control; const W=data.currentWeek; const orders=data.orders||{}; const ordersByRole={};
-      ROLES.forEach(r=> ordersByRole[r]=toIntMap(orders[r]||{}));
-      const state=computeGame(c, ordersByRole, W);
-      let rows=['item,role,week,onhand_start,unfilled_start,receipts,demand,ship,onhand_end,unfilled_end,fill_rate,order,inv_cost,bo_cost,exp_units,exp_cost'];
-      for(const r of ROLES){
-        for(let w=1; w<=W; w++){
-          const S=state[r];
-          const inv_cost=(S.onHandEnd[w]||0)*c.invCost;
-          const bo_cost=(S.unfilledEnd[w]||0)*c.boCost;
-          const avgDem=(r==='hospital')? movingAvg(c.baseConsumption,w-1,4) : movingAvg(S.demandSeen,w-1,4);
-          const onh=S.onHandEnd[w]||0; const woh=avgDem>0? onh/avgDem:0; const exp_units=woh>c.shelfLifeWeeks? ((woh-c.shelfLifeWeeks)/woh)*onh:0; const exp_cost=exp_units*c.expCost;
-          rows.push([
-            JSON.stringify(c.itemName), r, w,
-            S.onHandStart[w]||0, S.unfilledStart[w]||0, S.receipts[w]||0, S.demandSeen[w]||0, S.ship[w]||0, S.onHandEnd[w]||0, S.unfilledEnd[w]||0,
-            ((S.demandSeen[w]||0)+(S.unfilledStart[w]||0)>0? (S.ship[w]/((S.demandSeen[w]||0)+(S.unfilledStart[w]||0))):1).toFixed(4),
-            (ordersByRole[r][w]||0), inv_cost.toFixed(2), bo_cost.toFixed(2), exp_units.toFixed(2), exp_cost.toFixed(2)
-          ].join(','));
-        }
-      }
-      const blob = new Blob([rows.join('
-')], {type:'text/csv'});
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`hscg_export_${Date.now()}.csv`; a.click();
-    }
+    function renderInstructor(d){ const c=d.control; el('itemName').value=c.itemName; el('weeks').value=c.weeks; el('leadTime').value=c.leadTime; el('initInv').value=c.initInv; el('scenario').value=c.scenario; el('factoryOutage').value=spanify(c.factoryOutage); el('primeOutage').value=spanify(c.primeOutage); el('baseDemand').value=(c.baseConsumption||[]).join(', '); const ordersByRole={}; ROLES.forEach(r=>ordersByRole[r]=toIntMap(d.orders?.[r]||{})); const S=compute(c,ordersByRole,d.currentWeek); const tbl=document.createElement('table'); tbl.className='w-full text-sm'; tbl.innerHTML=`<thead><tr class='text-left text-slate-500'><th class='py-2'>Role</th><th>Ship</th><th>On-hand</th><th>Backlog</th><th>Fill%</th><th>Order (wk ${d.currentWeek})</th></tr></thead><tbody>${ROLES.map(r=>{const X=S[r],w=d.currentWeek;const fr=((X.fill[w]||1)*100).toFixed(0)+'%';const ord=ordersByRole[r][w]||0;return `<tr class='border-t'><td class='py-1'>${LABEL[r]}</td><td class='mono'>${X.ship[w]||0}</td><td class='mono'>${X.onEnd[w]||X.onStart[w]||0}</td><td class='mono'>${X.boEnd[w]||X.boStart[w]||0}</td><td class='mono'>${fr}</td><td class='mono'>${ord}</td></tr>`}).join('')}</tbody>`; const box=el('scoreboard'); box.innerHTML=''; box.appendChild(tbl); }
 
-    function applyPresetLocal(kind){
-      const weeks=+document.getElementById('weeks').value||24;
-      const base=seedBaseDemand(weeks).slice();
-      let fact='',prime='';
-      if(kind==='normal'){ /* defaults */ }
-      else if(kind==='transparency'){ document.getElementById('scenario').value='Transparency On (Info Only)'; }
-      else if(kind==='severe'){ for(let w=6; w<=12 && w<=weeks; w++) base[w-1]=Math.round(base[w-1]*1.8); fact='12-16'; prime='18-22'; document.getElementById('scenario').value='Severe Surge + Recall'; }
-      else if(kind==='hurricane'){ for(let w=3; w<=6 && w<=weeks; w++) base[w-1]=Math.round(base[w-1]*1.6); prime='7-9'; }
-      else if(kind==='strike'){ fact='8-12'; }
-      else if(kind==='outbreak'){ for(let w=5; w<=weeks; w++) base[w-1]=Math.round(base[w-1]*1.4); }
-      document.getElementById('baseDemand').value=base.join(', ');
-      document.getElementById('factoryOutage').value=fact; document.getElementById('primeOutage').value=prime;
-    }
-    async function applyPreset(ref){ const kind=document.getElementById('presetSelect').value; if(kind==='none') return; applyPresetLocal(kind); await applyControl(ref); }
+    function renderPlayer(d){ d=d||{}; el('playerNameHdr').textContent=myName||'Player'; const role = (roleLocked && lockedRole) ? lockedRole : el('roleSelect').value; const sel=el('roleSelect'); if(sel){ sel.value = role; sel.disabled = !!roleLocked; } const c=d.control||controlFromUI(); const ordersByRole={}; ROLES.forEach(r=>ordersByRole[r]=toIntMap(d.orders?.[r]||{})); const S=compute(c,ordersByRole,d.currentWeek||1); const w=d.currentWeek||1; const X=S[role]; el('roleStats').innerHTML=`<div class='grid grid-cols-2 gap-2 text-sm'><div>Orders from downstream</div><div class='mono'>${X.dem[w]||0}</div><div>Receipts (delayed)</div><div class='mono'>${X.rcv[w]||0}</div><div>Ship to downstream</div><div class='mono'>${X.ship[w]||0}</div><div>On-hand end</div><div class='mono'>${X.onEnd[w]||X.onStart[w]||0}</div><div>Backlog end</div><div class='mono'>${X.boEnd[w]||X.boStart[w]||0}</div><div>Fill rate</div><div class='mono'>${((X.fill[w]||1)*100).toFixed(0)}%</div></div>`; el('lanePeek').innerHTML = d.transparency ? `<div><b>All lanes (wk ${w})</b><div class='grid grid-cols-2 md:grid-cols-4 gap-2 mt-2'>${ROLES.map(r=>{const Y=S[r];return `<div class='p-3 bg-white rounded-xl shadow'><div class='text-xs text-slate-500'>${LABEL[r]}</div><div class='text-sm'>Ship: <b class='mono'>${Y.ship[w]||0}</b></div><div class='text-sm'>OH: <b class='mono'>${Y.onEnd[w]||0}</b></div><div class='text-sm'>BO: <b class='mono'>${Y.boEnd[w]||0}</b></div></div>`}).join('')}</div></div>` : '<div class="text-xs text-slate-500">Transparency Off</div>'; const myOrd=ordersByRole[role][w]||''; el('orderInput').value=myOrd; }
 
-    async function seedDemo(ref){
-      const snap=await getDoc(ref); const data=snap.data(); const W=Math.min(3, data.control.weeks||24); const orders=data.orders||{};
-      ROLES.forEach(r=> orders[r]=orders[r]||{});
-      for(let w=1; w<=W; w++){ orders.hospital[w]=120+10*w; orders.dc_regional[w]=130+8*w; orders.dc_prime[w]=140+6*w; orders.factory[w]=150+4*w; }
-      await updateDoc(ref,{ orders, currentWeek:W, writeKey });
-    }
+    function spanify(f){ let s='',i=0,W=f?.length||0; while(i<W){ if(f[i]){ let j=i; while(j+1<W&&f[j+1]) j++; s+=(s?', ':'')+(i+1)+(i===j?'':'-'+(j+1)); i=j+1; } else i++; } return s; }
+
+    // Kick off auto-join if URL contains params
+    autoJoinFromURL();
+
+    // --------- Minimal self-tests (console only) ---------
+    (function selfTests(){
+      try{
+        const pr = parseRanges('2, 4-6, 9', 10);
+        console.assert(pr.length===10 && pr[1] && pr[3] && pr[4] && pr[5] && pr[8] && !pr[0], 'parseRanges basic failed');
+        const ctrl={ itemName:'Test', weeks:4, leadTime:1, initInv:50, scenario:'Normal', baseConsumption:[10,10,10,10], factoryOutage:[false,false,false,false], primeOutage:[false,false,false,false] };
+        const orders={ hospital:{1:10,2:10}, dc_regional:{1:10,2:10}, dc_prime:{1:10,2:10}, factory:{1:10,2:10} };
+        const S=compute(ctrl,{hospital:orders.hospital,dc_regional:orders.dc_regional,dc_prime:orders.dc_prime,factory:orders.factory},2);
+        console.assert(Array.isArray(S.hospital.ship) && S.hospital.ship[1] >= 0, 'compute structure failed');
+        const invite=buildInviteText('TEST',[{r:'hospital',link:'https://x'}]);
+        console.assert(invite.includes('\n'), 'invite newline join failed');
+        (function(){
+          const c = { itemName:'x', weeks:3, leadTime:0, initInv:50, scenario:'Normal', baseConsumption:[10,10,10], factoryOutage:[false,false,true], primeOutage:[false,false,false] };
+          const o = { hospital:{1:10,2:10,3:10}, dc_regional:{}, dc_prime:{}, factory:{} };
+          const Sx = compute(c, {hospital:o.hospital, dc_regional:{}, dc_prime:{}, factory:{}}, 3);
+          console.assert(Sx.factory.ship[3]===0, 'factory outage not enforced');
+        })();
+        (function(){
+          const c = { itemName:'x', weeks:3, leadTime:1, initInv:0, scenario:'Normal', baseConsumption:[0,0,0], factoryOutage:[false,false,false], primeOutage:[false,false,false] };
+          const o = { hospital:{1:5}, dc_regional:{1:5}, dc_prime:{1:5}, factory:{1:5} };
+          const Sy = compute(c, {hospital:o.hospital, dc_regional:o.dc_regional, dc_prime:o.dc_prime, factory:o.factory}, 2);
+          console.assert(Sy.dc_regional.rcv[2] >= 0, 'lead time receipt missing at t+1');
+        })();
+        (function(){ setStatus('connected','green'); const pill = document.getElementById('statusPill'); console.assert(pill.className.includes('bg-green-100') && pill.className.includes('text-green-700'), 'status pill classes missing'); })();
+        // New: spanify compaction test
+        (function(){
+          const s = spanify([false,true,true,false,true,false,false,true]);
+          console.assert(s==='2-3, 5, 8', 'spanify compaction failed: ' + s);
+        })();
+        console.log('%cSelf-tests OK','color:green');
+      }catch(e){ console.warn('Self-tests exception', e); }
+    })();
   </script>
 </body>
 </html>
